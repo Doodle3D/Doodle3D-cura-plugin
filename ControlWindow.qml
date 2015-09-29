@@ -10,11 +10,12 @@ import UM 1.1 as UM
 
 UM.Dialog
 {
-    width: 500 * Screen.devicePixelRatio;
+    width: 200 * Screen.devicePixelRatio;
     height: 100 * Screen.devicePixelRatio;
     modality: Qt.NonModal
+    id: d3dbase
 
-    title: catalog.i18nc("@title:window", "Print with USB")
+    title: catalog.i18nc("@title:window", "Print to Doodle3D WiFi-Box")
 
     Column
     {
@@ -56,17 +57,21 @@ UM.Dialog
     rightButtons: [
         Button
         {
+            //: USB Printing dialog cancel print button
+            text: catalog.i18nc("@action:button","Cancel");
+            onClicked: { 
+                manager.cancelPrint();
+                d3dbase.visible = false;
+            }
+            // enabled: manager.progress == 0 ? false:  true
+        },
+
+        Button
+        {
             //: USB Printing dialog start print button
             text: catalog.i18nc("@action:button","Print");
             onClicked: { manager.startPrint() }
-            enabled: manager.progress == 0 ? true : false
-        },
-        Button
-        {
-            //: USB Printing dialog cancel print button
-            text: catalog.i18nc("@action:button","Cancel");
-            onClicked: { manager.cancelPrint() }
-            enabled: manager.progress == 0 ? false:  true
+            // enabled: manager.progress == 0 ? true : false
         }
     ]
 }

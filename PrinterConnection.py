@@ -11,6 +11,10 @@ import functools
 import os
 import os.path
 
+import http.client
+import json
+import urllib
+
 from UM.Application import Application
 from UM.Signal import Signal, SignalEmitter
 from UM.Resources import Resources
@@ -32,9 +36,9 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         OutputDevice.__init__(self, serial_port)
         SignalEmitter.__init__(self)
         #super().__init__(serial_port)
-        self.setName(catalog.i18nc("@item:inmenu", "USB printing"))
-        self.setShortDescription(catalog.i18nc("@action:button", "Print with USB"))
-        self.setDescription(catalog.i18nc("@info:tooltip", "Print with USB"))
+        self.setName(catalog.i18nc("@item:inmenu", "Doodle3D printing"))
+        self.setShortDescription(catalog.i18nc("@action:button", "Print with Doodle3D"))
+        self.setDescription(catalog.i18nc("@info:tooltip", "Print to Doodle3D WiFi-Box" + " (" + serial_port + ")"))
         self.setIconName("print")
 
         self._serial = None
@@ -59,8 +63,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._progress = 0
 
-        self._listen_thread = threading.Thread(target=self._listen)
-        self._listen_thread.daemon = True
+        # self._listen_thread = threading.Thread(target=self._listen)
+        # self._listen_thread.daemon = True
 
         self._update_firmware_thread = threading.Thread(target= self._updateFirmware)
         self._update_firmware_thread.deamon = True
@@ -153,11 +157,20 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             return False
         return self._is_printing
 
+    def sendGCode(self,gcode):
+        self.httppost(self._serial_port,"/d3dapi/printer/print",{
+            'gcode': gcode,
+            'start': 'true',
+            'first': 'true'
+        })
+
     @pyqtSlot()
     def startPrint(self):
         self.writeStarted.emit(self)
-        gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
-        self.printGCode(gcode_list)
+        self.sendGCode("G28")
+
+        # gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
+        # self.printGCode(gcode_list)
 
     ##  Start a print based on a g-code.
     #   \param gcode_list List with gcode (strings).
@@ -253,53 +266,53 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def _connect(self):
         Logger.log("d", "Attempting to connect to %s", self._serial_port)
         self._is_connecting = True
-        programmer = stk500v2.Stk500v2()
-        try:
-            programmer.connect(self._serial_port) # Connect with the serial, if this succeeds, it"s an arduino based usb device.
-            self._serial = programmer.leaveISP()
-        except ispBase.IspError as e:
-            Logger.log("i", "Could not establish connection on %s: %s. Device is not arduino based." %(self._serial_port,str(e)))
-        except Exception as e:
-            Logger.log("i", "Could not establish connection on %s, unknown reasons.  Device is not arduino based." % self._serial_port)
+        # programmer = stk500v2.Stk500v2()
+        # try:
+        #     programmer.connect(self._serial_port) # Connect with the serial, if this succeeds, it"s an arduino based usb device.
+        #     self._serial = programmer.leaveISP()
+        # except ispBase.IspError as e:
+        #     Logger.log("i", "Could not establish connection on %s: %s. Device is not arduino based." %(self._serial_port,str(e)))
+        # except Exception as e:
+        #     Logger.log("i", "Could not establish connection on %s, unknown reasons.  Device is not arduino based." % self._serial_port)
 
-        # If the programmer connected, we know its an atmega based version. Not all that usefull, but it does give some debugging information.
-        for baud_rate in self._getBaudrateList(): # Cycle all baud rates (auto detect)
-            Logger.log("d","Attempting to connect to printer with serial %s on baud rate %s", self._serial_port, baud_rate)
-            if self._serial is None:
-                try:
-                    self._serial = serial.Serial(str(self._serial_port), baud_rate, timeout = 3, writeTimeout = 10000)
-                except serial.SerialException:
-                    #Logger.log("i", "Could not open port %s" % self._serial_port)
-                    continue
-            else:
-                if not self.setBaudRate(baud_rate):
-                    continue # Could not set the baud rate, go to the next
+        # # If the programmer connected, we know its an atmega based version. Not all that usefull, but it does give some debugging information.
+        # for baud_rate in self._getBaudrateList(): # Cycle all baud rates (auto detect)
+        #     Logger.log("d","Attempting to connect to printer with serial %s on baud rate %s", self._serial_port, baud_rate)
+        #     if self._serial is None:
+        #         try:
+        #             self._serial = serial.Serial(str(self._serial_port), baud_rate, timeout = 3, writeTimeout = 10000)
+        #         except serial.SerialException:
+        #             #Logger.log("i", "Could not open port %s" % self._serial_port)
+        #             continue
+        #     else:
+        #         if not self.setBaudRate(baud_rate):
+        #             continue # Could not set the baud rate, go to the next
 
-            time.sleep(1.5) # Ensure that we are not talking to the bootloader. 1.5 sec seems to be the magic number
-            sucesfull_responses = 0
-            timeout_time = time.time() + 5
-            self._serial.write(b"\n")
-            self._sendCommand("M105")  # Request temperature, as this should (if baudrate is correct) result in a command with "T:" in it
-            while timeout_time > time.time():
-                line = self._readline()
-                if line is None:
-                    self.setIsConnected(False) # Something went wrong with reading, could be that close was called.
-                    return
+        #     time.sleep(1.5) # Ensure that we are not talking to the bootloader. 1.5 sec seems to be the magic number
+        #     sucesfull_responses = 0
+        #     timeout_time = time.time() + 5
+        #     self._serial.write(b"\n")
+        #     self._sendCommand("M105")  # Request temperature, as this should (if baudrate is correct) result in a command with "T:" in it
+        #     while timeout_time > time.time():
+        #         line = self._readline()
+        #         if line is None:
+        #             self.setIsConnected(False) # Something went wrong with reading, could be that close was called.
+        #             return
                 
-                if b"T:" in line:
-                    self._serial.timeout = 0.5
-                    sucesfull_responses += 1
-                    if sucesfull_responses >= self._required_responses_auto_baud:
-                        self._serial.timeout = 2 #Reset serial timeout
-                        self.setIsConnected(True)
-                        Logger.log("i", "Established printer connection on port %s" % self._serial_port)
-                        return 
+        #         if b"T:" in line:
+        #             self._serial.timeout = 0.5
+        #             sucesfull_responses += 1
+        #             if sucesfull_responses >= self._required_responses_auto_baud:
+        #                 self._serial.timeout = 2 #Reset serial timeout
+        self.setIsConnected(True)
+        Logger.log("i", "Established printer connection on port %s" % self._serial_port)
+        return 
 
-                self._sendCommand("M105") # Send M105 as long as we are listening, otherwise we end up in an undefined state
+        #         self._sendCommand("M105") # Send M105 as long as we are listening, otherwise we end up in an undefined state
 
-        Logger.log("e", "Baud rate detection for %s failed", self._serial_port)
-        self.close() # Unable to connect, wrap up.
-        self.setIsConnected(False)
+        # Logger.log("e", "Baud rate detection for %s failed", self._serial_port)
+        # self.close() # Unable to connect, wrap up.
+        # self.setIsConnected(False)
 
     ##  Set the baud rate of the serial. This can cause exceptions, but we simply want to ignore those.
     def setBaudRate(self, baud_rate):
@@ -314,8 +327,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         if self._is_connected != state:
             self._is_connected = state
             self.connectionStateChanged.emit(self._serial_port)
-            if self._is_connected: 
-                self._listen_thread.start() #Start listening
+            # if self._is_connected: 
+                # self._listen_thread.start() #Start listening
         else:
             Logger.log("w", "Printer connection state was not changed")
 
@@ -333,17 +346,17 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._connect_thread = threading.Thread(target=self._connect)
         self._connect_thread.daemon = True
         
-        if self._serial is not None:
-            self.setIsConnected(False)
-            try:
-                self._listen_thread.join()
-            except:
-                pass
-            self._serial.close()
+        # if self._serial is not None:
+        #     self.setIsConnected(False)
+        #     try:
+        #         self._listen_thread.join()
+        #     except:
+        #         pass
+        # self._serial.close()
 
-        self._listen_thread = threading.Thread(target=self._listen)
-        self._listen_thread.daemon = True
-        self._serial = None
+        # self._listen_thread = threading.Thread(target=self._listen)
+        # self._listen_thread.daemon = True
+        # self._serial = None
 
     def isConnected(self):
         return self._is_connected 
@@ -370,8 +383,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     ##  Directly send the command, withouth checking connection state (eg; printing).
     #   \param cmd string with g-code
     def _sendCommand(self, cmd):
-        if self._serial is None:
-            return
+        # if self._serial is None:
+            # return
 
         if "M109" in cmd or "M190" in cmd:
             self._heatup_wait_start_time = time.time()
@@ -390,13 +403,14 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 pass
         try:
             command = (cmd + "\n").encode()
-            self._serial.write(b"\n")
-            self._serial.write(command)
+            Logger.log("d","TODO: send gcode to server: %s" % cmd)
+            # self._serial.write(b"\n")
+            # self._serial.write(command)
         except serial.SerialTimeoutException:
             Logger.log("w","Serial timeout while writing to serial port, trying again.")
             try:
                 time.sleep(0.5)
-                self._serial.write((cmd + "\n").encode())
+                # self._serial.write((cmd + "\n").encode())
             except Exception as e:
                 Logger.log("e","Unexpected error while writing serial port %s " % e)
                 self._setErrorState("Unexpected error while writing serial port %s " % e)
@@ -413,7 +427,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def createControlInterface(self):
         if self._control_view is None:
             Logger.log("d", "Creating control interface for printer connection")
-            path = QUrl.fromLocalFile(os.path.join(PluginRegistry.getInstance().getPluginPath("USBPrinting"), "ControlWindow.qml"))
+            path = QUrl.fromLocalFile(os.path.join(PluginRegistry.getInstance().getPluginPath("Doodle3D"), "ControlWindow.qml"))
             component = QQmlComponent(Application.getInstance()._engine, path)
             self._control_context = QQmlContext(Application.getInstance()._engine.rootContext())
             self._control_context.setContextProperty("manager", self)
@@ -475,77 +489,77 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             self._z_min_endstop_pressed = value
 
     ##  Listen thread function. 
-    def _listen(self):
-        Logger.log("i", "Printer connection listen thread started for %s" % self._serial_port)
-        temperature_request_timeout = time.time()
-        ok_timeout = time.time()
-        while self._is_connected:
-            line = self._readline()
+    # def _listen(self):
+    #     Logger.log("i", "Printer connection listen thread started for %s" % self._serial_port)
+    #     temperature_request_timeout = time.time()
+    #     ok_timeout = time.time()
+    #     while self._is_connected:
+    #         line = self._readline()
 
-            if line is None: 
-                break # None is only returned when something went wrong. Stop listening
+    #         if line is None: 
+    #             break # None is only returned when something went wrong. Stop listening
 
-            if time.time() > temperature_request_timeout:
-                if self._extruder_count > 0:
-                    self._temperature_requested_extruder_index = (self._temperature_requested_extruder_index + 1) % self._extruder_count
-                    self.sendCommand("M105 T%d" % (self._temperature_requested_extruder_index))
-                else:
-                    self.sendCommand("M105")
-                temperature_request_timeout = time.time() + 5
+    #         if time.time() > temperature_request_timeout:
+    #             if self._extruder_count > 0:
+    #                 self._temperature_requested_extruder_index = (self._temperature_requested_extruder_index + 1) % self._extruder_count
+    #                 self.sendCommand("M105 T%d" % (self._temperature_requested_extruder_index))
+    #             else:
+    #                 self.sendCommand("M105")
+    #             temperature_request_timeout = time.time() + 5
 
-            if line.startswith(b"Error:"):
-                # Oh YEAH, consistency.
-                # Marlin reports an MIN/MAX temp error as "Error:x\n: Extruder switched off. MAXTEMP triggered !\n"
-                #       But a bed temp error is reported as "Error: Temperature heated bed switched off. MAXTEMP triggered !!"
-                #       So we can have an extra newline in the most common case. Awesome work people.
-                if re.match(b"Error:[0-9]\n", line):
-                    line = line.rstrip() + self._readline()
+    #         if line.startswith(b"Error:"):
+    #             # Oh YEAH, consistency.
+    #             # Marlin reports an MIN/MAX temp error as "Error:x\n: Extruder switched off. MAXTEMP triggered !\n"
+    #             #       But a bed temp error is reported as "Error: Temperature heated bed switched off. MAXTEMP triggered !!"
+    #             #       So we can have an extra newline in the most common case. Awesome work people.
+    #             if re.match(b"Error:[0-9]\n", line):
+    #                 line = line.rstrip() + self._readline()
 
-                # Skip the communication errors, as those get corrected.
-                if b"Extruder switched off" in line or b"Temperature heated bed switched off" in line or b"Something is wrong, please turn off the printer." in line:
-                    if not self.hasError():
-                        self._setErrorState(line[6:])
+    #             # Skip the communication errors, as those get corrected.
+    #             if b"Extruder switched off" in line or b"Temperature heated bed switched off" in line or b"Something is wrong, please turn off the printer." in line:
+    #                 if not self.hasError():
+    #                     self._setErrorState(line[6:])
 
-            elif b" T:" in line or line.startswith(b"T:"): #Temperature message
-                try: 
-                    self._setExtruderTemperature(self._temperature_requested_extruder_index,float(re.search(b"T: *([0-9\.]*)", line).group(1)))
-                except:
-                    pass
-                if b"B:" in line: # Check if it"s a bed temperature
-                    try:
-                        self._setBedTemperature(float(re.search(b"B: *([0-9\.]*)", line).group(1)))
-                    except Exception as e:
-                        pass
-                #TODO: temperature changed callback
-            elif b"_min" in line or b"_max" in line:
-                tag, value = line.split(b':', 1)
-                self._setEndstopState(tag,(b'H' in value or b'TRIGGERED' in value))
+    #         elif b" T:" in line or line.startswith(b"T:"): #Temperature message
+    #             try: 
+    #                 self._setExtruderTemperature(self._temperature_requested_extruder_index,float(re.search(b"T: *([0-9\.]*)", line).group(1)))
+    #             except:
+    #                 pass
+    #             if b"B:" in line: # Check if it"s a bed temperature
+    #                 try:
+    #                     self._setBedTemperature(float(re.search(b"B: *([0-9\.]*)", line).group(1)))
+    #                 except Exception as e:
+    #                     pass
+    #             #TODO: temperature changed callback
+    #         elif b"_min" in line or b"_max" in line:
+    #             tag, value = line.split(b':', 1)
+    #             self._setEndstopState(tag,(b'H' in value or b'TRIGGERED' in value))
 
-            if self._is_printing:
-                if line == b"" and time.time() > ok_timeout:
-                    line = b"ok" # Force a timeout (basicly, send next command)
+    #         if self._is_printing:
+    #             if line == b"" and time.time() > ok_timeout:
+    #                 line = b"ok" # Force a timeout (basicly, send next command)
 
-                if b"ok" in line:
-                    ok_timeout = time.time() + 5
-                    if not self._command_queue.empty():
-                        self._sendCommand(self._command_queue.get())
-                    else:
-                        self._sendNextGcodeLine()
-                elif b"resend" in line.lower() or b"rs" in line: # Because a resend can be asked with "resend" and "rs"
-                    try:
-                        self._gcode_position = int(line.replace(b"N:",b" ").replace(b"N",b" ").replace(b":",b" ").split()[-1])
-                    except:
-                        if b"rs" in line:
-                            self._gcode_position = int(line.split()[1])
+    #             if b"ok" in line:
+    #                 ok_timeout = time.time() + 5
+    #                 if not self._command_queue.empty():
+    #                     self._sendCommand(self._command_queue.get())
+    #                 else:
+    #                     self._sendNextGcodeLine()
+    #             elif b"resend" in line.lower() or b"rs" in line: # Because a resend can be asked with "resend" and "rs"
+    #                 try:
+    #                     self._gcode_position = int(line.replace(b"N:",b" ").replace(b"N",b" ").replace(b":",b" ").split()[-1])
+    #                 except:
+    #                     if b"rs" in line:
+    #                         self._gcode_position = int(line.split()[1])
 
-            else: # Request the temperature on comm timeout (every 2 seconds) when we are not printing.)
-                if line == b"":
-                    if self._extruder_count > 0:
-                        self._temperature_requested_extruder_index = (self._temperature_requested_extruder_index + 1) % self._extruder_count
-                        self.sendCommand("M105 T%d" % self._temperature_requested_extruder_index)
-                    else:
-                        self.sendCommand("M105")
-        Logger.log("i", "Printer connection listen thread stopped for %s" % self._serial_port)
+    #         else: # Request the temperature on comm timeout (every 2 seconds) when we are not printing.)
+    #             if line == b"":
+    #                 if self._extruder_count > 0:
+    #                     self._temperature_requested_extruder_index = (self._temperature_requested_extruder_index + 1) % self._extruder_count
+    #                     self.sendCommand("M105 T%d" % self._temperature_requested_extruder_index)
+    #                 else:
+    #                     self.sendCommand("M105")
+    #     Logger.log("i", "Printer connection listen thread stopped for %s" % self._serial_port)
 
     ##  Send next Gcode in the gcode list
     def _sendNextGcodeLine(self):
@@ -622,3 +636,20 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._update_firmware_thread.deamon = True
 
         self.connect()
+
+    def httppost(self,domain,path,data):
+        print('post: ',domain,path)
+        print('  data: ',data)
+        # jsonData = json.dump(data)
+        # print('  json: ',jsonData)
+        params = urllib.parse.urlencode(data)
+        print('  params: ',params)
+        headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}
+        connect = http.client.HTTPConnection(domain)
+        connect.request("POST", path, params, headers)
+        response = connect.getresponse()
+        print('  response: ',response.status, response.reason)
+        jsonresponse = response.read()
+        print('  ',jsonresponse)
+        return json.loads(jsonresponse.decode())
+

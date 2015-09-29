@@ -75,7 +75,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     #   This will create the view if its not already created.
     def spawnFirmwareInterface(self, serial_port):
         if self._firmware_view is None:
-            path = QUrl.fromLocalFile(os.path.join(PluginRegistry.getInstance().getPluginPath("Doodle3D"), "FirmwareUpdateWindow.qml"))
+            path = QUrl.fromLocalFile(os.path.join(PluginRegistry.getInstance().getPluginPath("Doodle3D"), "SettingsWindow.qml"))
             component = QQmlComponent(Application.getInstance()._engine, path)
 
             self._firmware_context = QQmlContext(Application.getInstance()._engine.rootContext())
@@ -176,24 +176,27 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     #   \param only_list_usb If true, only usb ports are listed
     def getSerialPortList(self, only_list_usb = False):
         base_list = []
-        if platform.system() == "Windows":
-            import winreg
-            try:
-                key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,"HARDWARE\\DEVICEMAP\\SERIALCOMM")
-                i = 0
-                while True:
-                    values = winreg.EnumValue(key, i)
-                    if not only_list_usb or "USBSER" in values[0]:
-                        base_list += [values[1]]
-                    i += 1
-            except Exception as e:
-                pass
-        else:
-            if only_list_usb:
-                base_list = base_list + glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*") + glob.glob("/dev/cu.usb*")
-                base_list = filter(lambda s: "Bluetooth" not in s, base_list) # Filter because mac sometimes puts them in the list
-            else:
-                base_list = base_list + glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*") + glob.glob("/dev/cu.*") + glob.glob("/dev/tty.usb*") + glob.glob("/dev/rfcomm*") + glob.glob("/dev/serial/by-id/*")
+        # if platform.system() == "Windows":
+        #     # import winreg
+        #     try:
+        #         key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,"HARDWARE\\DEVICEMAP\\SERIALCOMM")
+        #         i = 0
+        #         while True:
+        #             values = winreg.EnumValue(key, i)
+        #             if not only_list_usb or "USBSER" in values[0]:
+        #                 base_list += [values[1]]
+        #             i += 1
+        #     except Exception as e:
+        #         pass
+        # else:
+            # if only_list_usb:
+        base_list = ["10.0.0.194", "10.0.0.20"]
+
+        # base_list = filter(lambda s: "Bluetooth" not in s, base_list) # Filter because mac sometimes puts them in the list
+        # else:
+        #     base_list = base_list + glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*") + glob.glob("/dev/cu.*") + glob.glob("/dev/tty.usb*") + glob.glob("/dev/rfcomm*") + glob.glob("/dev/serial/by-id/*")
         return list(base_list)
 
     _instance = None
+
+
