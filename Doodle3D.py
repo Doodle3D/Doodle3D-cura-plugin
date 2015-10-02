@@ -1,6 +1,8 @@
 # Copyright (c) 2015 Ultimaker B.V.
 # Cura is released under the terms of the AGPLv3 or higher.
 
+from . import httptest
+
 from UM.Signal import Signal, SignalEmitter
 from . import PrinterConnection
 from UM.Application import Application
@@ -21,6 +23,10 @@ import time
 import os
 import os.path
 import sys
+
+import http.client
+import json
+
 from UM.Extension import Extension
 
 from PyQt5.QtQuick import QQuickView
@@ -67,7 +73,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
 
     def _updateThread(self):
         while self._check_updates:
-            result = self.getSerialPortList(only_list_usb = True)
+            result = self.getSerialPortList()
             self._addRemovePorts(result)
             time.sleep(5)
 
@@ -174,28 +180,38 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
 
     ##  Create a list of serial ports on the system.
     #   \param only_list_usb If true, only usb ports are listed
-    def getSerialPortList(self, only_list_usb = False):
+    def getSerialPortList(self):
         base_list = []
-        # if platform.system() == "Windows":
-        #     # import winreg
-        #     try:
-        #         key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,"HARDWARE\\DEVICEMAP\\SERIALCOMM")
-        #         i = 0
-        #         while True:
-        #             values = winreg.EnumValue(key, i)
-        #             if not only_list_usb or "USBSER" in values[0]:
-        #                 base_list += [values[1]]
-        #             i += 1
-        #     except Exception as e:
-        #         pass
-        # else:
-            # if only_list_usb:
-        base_list = ["10.0.0.194", "10.0.0.20"]
 
-        # base_list = filter(lambda s: "Bluetooth" not in s, base_list) # Filter because mac sometimes puts them in the list
-        # else:
-        #     base_list = base_list + glob.glob("/dev/ttyUSB*") + glob.glob("/dev/ttyACM*") + glob.glob("/dev/cu.*") + glob.glob("/dev/tty.usb*") + glob.glob("/dev/rfcomm*") + glob.glob("/dev/serial/by-id/*")
+        #Get response from api/list.php and retrieve local ip 
+        ## from each individual boxes found on the local network
+        boxesListResponse = self.get("connect.doodle3d.com","/api/list.php")
+        boxes = boxesListResponse['data']
+
+        for index in range(len(boxes)):
+            box = boxes[index]
+            
+            try:#Check if the boxes are alive
+                boxesAliveCheck = self.get(box['localip'],"/d3dapi/network/alive")
+            
+            except:#Run this exception for the boxes that aren't alive (anymore)
+                Logger.log("d", "Error trying")
+            
+            else:#Boxes that are alive will be formed together into the base_list
+                base_list.append(box['localip'])
+
         return list(base_list)
+
+    #Takes Domain and Path and returns decoded JSON response back
+    def get (self,domain,path):
+        print('get: ',domain,path)
+        connect = http.client.HTTPConnection(domain)
+        connect.request("GET", path)
+        response = connect.getresponse()
+        print('  response: ',response.status, response.reason)
+        jsonresponse = response.read()
+        print('  ',jsonresponse)
+        return json.loads(jsonresponse.decode())
 
     _instance = None
 

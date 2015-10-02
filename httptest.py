@@ -1,10 +1,13 @@
 import http.client
 import json
 import urllib
-import pprint
+## import pprint
 
-pp = pprint.PrettyPrinter(indent=2)
+## pp = pprint.PrettyPrinter(indent=2)
 
+def __init__(self):
+    Logger.log("d", "runs this")
+"""
 def get (domain,path):
     print('get: ',domain,path)
     connect = http.client.HTTPConnection(domain)
@@ -91,3 +94,4 @@ while True:
     actions[action]()
 
 # post(boxIP,"/d3dapi/printer/print","")
+"""

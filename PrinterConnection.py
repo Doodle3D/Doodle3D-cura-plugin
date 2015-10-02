@@ -63,8 +63,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._progress = 0
 
-        # self._listen_thread = threading.Thread(target=self._listen)
-        # self._listen_thread.daemon = True
+        self._listen_thread = threading.Thread(target=self._listen)
+        self._listen_thread.daemon = True
 
         self._update_firmware_thread = threading.Thread(target= self._updateFirmware)
         self._update_firmware_thread.deamon = True
