@@ -182,6 +182,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     #   \param only_list_usb If true, only usb ports are listed
     def getSerialPortList(self):
         base_list = []
+        ##ipaddress = [self.get(bo)]
 
         #Get response from api/list.php and retrieve local ip 
         ## from each individual boxes found on the local network
@@ -195,7 +196,21 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
                 boxesAliveCheck = self.get(box['localip'],"/d3dapi/network/alive")
             
             except:#Run this exception for the boxes that aren't alive (anymore)
-                Logger.log("d", "Error trying")
+
+                if box['localip'] in self._printer_connections:
+
+                    Logger.log("d", "_printer_connections is: %s" % self._printer_connections)
+                    self._printer_connections[box['localip']]._is_connected = False
+                    self._printer_connections[box['localip']].close()
+                    del self._printer_connections[box['localip']]
+                    self.getOutputDeviceManager().removeOutputDevice(box['localip'])
+                    Logger.log("d", "_printer_connections is: %s" % self._printer_connections)
+
+                else:
+                    pass
+
+                ##Logger.log("d", "Value of _printer_connections: %s" % self._printer_connections)
+                ##Logger.log("d", "Value of _printer_connections: %s" % self._printer_connections_model)
             
             else:#Boxes that are alive will be formed together into the base_list
                 base_list.append(box['localip'])
@@ -205,7 +220,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     #Takes Domain and Path and returns decoded JSON response back
     def get (self,domain,path):
         print('get: ',domain,path)
-        connect = http.client.HTTPConnection(domain)
+        connect = http.client.HTTPConnection(domain, port)
         connect.request("GET", path)
         response = connect.getresponse()
         print('  response: ',response.status, response.reason)

@@ -63,8 +63,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._progress = 0
 
-        self._listen_thread = threading.Thread(target=self._listen)
-        self._listen_thread.daemon = True
+        ##self._listen_thread = threading.Thread(target=self._listen)
+        ##self._listen_thread.daemon = True
 
         self._update_firmware_thread = threading.Thread(target= self._updateFirmware)
         self._update_firmware_thread.deamon = True
@@ -337,6 +337,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     ##  Close the printer connection
     def close(self):
         Logger.log("d", "Closing the printer connection.")
+        
         if self._connect_thread.isAlive():
             try:
                 self._connect_thread.join()
