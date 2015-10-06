@@ -337,7 +337,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     ##  Close the printer connection
     def close(self):
         Logger.log("d", "Closing the printer connection.")
-        
         if self._connect_thread.isAlive():
             try:
                 self._connect_thread.join()

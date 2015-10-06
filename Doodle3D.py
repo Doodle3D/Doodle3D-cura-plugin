@@ -182,8 +182,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     #   \param only_list_usb If true, only usb ports are listed
     def getSerialPortList(self):
         base_list = []
-        ##ipaddress = [self.get(bo)]
-
+        
         #Get response from api/list.php and retrieve local ip 
         ## from each individual boxes found on the local network
         boxesListResponse = self.get("connect.doodle3d.com","/api/list.php")
@@ -198,14 +197,10 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
             except:#Run this exception for the boxes that aren't alive (anymore)
 
                 if box['localip'] in self._printer_connections:
-
-                    Logger.log("d", "_printer_connections is: %s" % self._printer_connections)
                     self._printer_connections[box['localip']]._is_connected = False
                     self._printer_connections[box['localip']].close()
                     del self._printer_connections[box['localip']]
                     self.getOutputDeviceManager().removeOutputDevice(box['localip'])
-                    Logger.log("d", "_printer_connections is: %s" % self._printer_connections)
-
                 else:
                     pass
 
@@ -220,7 +215,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     #Takes Domain and Path and returns decoded JSON response back
     def get (self,domain,path):
         print('get: ',domain,path)
-        connect = http.client.HTTPConnection(domain, port)
+        connect = http.client.HTTPConnection(domain)
         connect.request("GET", path)
         response = connect.getresponse()
         print('  response: ',response.status, response.reason)
