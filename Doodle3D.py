@@ -1,8 +1,6 @@
 # Copyright (c) 2015 Ultimaker B.V.
 # Cura is released under the terms of the AGPLv3 or higher.
 
-from . import httptest
-
 from UM.Signal import Signal, SignalEmitter
 from . import PrinterConnection
 from UM.Application import Application
@@ -204,9 +202,6 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
                 else:
                     pass
 
-                ##Logger.log("d", "Value of _printer_connections: %s" % self._printer_connections)
-                ##Logger.log("d", "Value of _printer_connections: %s" % self._printer_connections_model)
-            
             else:#Boxes that are alive will be formed together into the base_list
                 base_list.append(box['localip'])
 

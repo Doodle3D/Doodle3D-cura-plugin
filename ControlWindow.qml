@@ -61,7 +61,7 @@ UM.Dialog
             text: catalog.i18nc("@action:button","Cancel");
             onClicked: { 
                 manager.cancelPrint();
-                d3dbase.visible = false;
+                //d3dbase.visible = true;
             }
             // enabled: manager.progress == 0 ? false:  true
         },

@@ -10,6 +10,7 @@ import re
 import functools
 import os
 import os.path
+import sys
 
 import http.client
 import json
@@ -49,7 +50,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._connect_thread.daemon = True
 
         self._end_stop_thread = threading.Thread(target = self._pollEndStop)
-        self._end_stop_thread.deamon = True
+        self._end_stop_thread.daemon = True
 
         # Printer is connected
         self._is_connected = False
@@ -65,9 +66,10 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         ##self._listen_thread = threading.Thread(target=self._listen)
         ##self._listen_thread.daemon = True
+        self._blockIndex = None
 
         self._update_firmware_thread = threading.Thread(target= self._updateFirmware)
-        self._update_firmware_thread.deamon = True
+        self._update_firmware_thread.daemon = True
         
         self._heatup_wait_start_time = time.time()
 
@@ -122,6 +124,12 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._control_view = None
 
+        self._printer_info_thread = threading.Thread(target = self.getPrinterInfo)
+        self._printer_info_thread.daemon = True
+
+        self._printing_thread = threading.Thread(target = self.printGCode)
+        self._printing_thread.daemon = True
+
     onError = pyqtSignal()
     progressChanged = pyqtSignal()
     extruderTemperatureChanged = pyqtSignal()
@@ -135,7 +143,11 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     @pyqtProperty(float, notify = extruderTemperatureChanged)
     def extruderTemperature(self):
-        return self._extruder_temperatures[0]
+        ##self.stateReply = self.get(self._serial_port,"/d3dapi/info/status")
+        ##self.extruderTemperatureChanged.emit()
+        ##self.extTemperature = self.stateReply['data']['hotend']
+        return self.extTemperature
+        ##self._extruder_temperatures[0]
 
     @pyqtProperty(float, notify = bedTemperatureChanged)
     def bedTemperature(self):
@@ -157,49 +169,81 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             return False
         return self._is_printing
 
-    def sendGCode(self,gcode):
-        self.httppost(self._serial_port,"/d3dapi/printer/print",{
+    def sendGCode(self,gcode,index):
+        if index == 0:
+            first = 'true'
+        else:
+            first = 'false'
+        gcodeResponse = self.httppost(self._serial_port,"/d3dapi/printer/print",{
             'gcode': gcode,
-            'start': 'true',
-            'first': 'true'
+            'start': first,
+            'first': first
         })
+
+        return gcodeResponse
 
     @pyqtSlot()
     def startPrint(self):
+        ##if (self.stateReply['data']['state'] == "idle" or stateReply['data']['state'] == 'buffering'):
+        Logger.log("d", "startPrint wordt uitgevoerd")
         self.writeStarted.emit(self)
-        self.sendGCode("G28")
-
-        # gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
-        # self.printGCode(gcode_list)
+        self._blockIndex = 0
+        gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
+        Logger.log("d", "gcode_list is: %s" % gcode_list)
+        self.printGCode(gcode_list)
+        self._printing_thread.start()
+        
+        ## else:
+        ##     Logger.log("d","hijs al bezig")
 
     ##  Start a print based on a g-code.
     #   \param gcode_list List with gcode (strings).
     def printGCode(self, gcode_list):
-        if self.isPrinting() or not self._is_connected:
-            Logger.log("d", "Printer is busy or not connected, aborting print")
-            self.writeError.emit(self)
-            return
+        self.joinedString = "".join(gcode_list)
 
-        self._gcode.clear()
-        for layer in gcode_list:
-            self._gcode.extend(layer.split("\n"))
 
-        #Reset line number. If this is not done, first line is sometimes ignored
-        self._gcode.insert(0, "M110")
-        self._gcode_position = 0
-        self._print_start_time_100 = None
-        self._is_printing = True
-        self._print_start_time = time.time()
+        self.decodedList = []
+        self.decodedList = self.joinedString.split('\n')
 
-        for i in range(0, 4): #Push first 4 entries before accepting other inputs
-            self._sendNextGcodeLine()
+        Logger.log("d", "decodedList is: %s" % self.decodedList)
 
-        self.writeFinished.emit(self)
+        self.blocks = []
+        self.tempBlock = []
+
+        for i in range(len(self.decodedList)):
+            self.tempBlock.append(self.decodedList[i])
+
+            if sys.getsizeof(self.tempBlock) > 7000:
+                self.blocks.append(self.tempBlock)
+                Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
+                ##self.getPrinterInfo()
+                ##Logger.log("d", "self.extTemperature is: %s" % self.extTemperature)
+                self.tempBlock = []
+                ##self.setProgress((  / self.totalLines) * 100)
+                ##self.progressChanged.emit()
+
+        
+        self.blocks.append(self.tempBlock)
+        self.tempBlock = []
+        
+        self.totalLines = self.joinedString.count('\n') - self.joinedString.count('\n;') - len(self.blocks)
+
+        ## Size of the print defined in total lines so we can use it to calculate the progress bar
+        Logger.log("d","totalLines is: %s" % self.totalLines)
+        
+        for j in range(len(self.blocks)):
+            Logger.log("d", "Block sending")
+            Logger.log("d", "response is: %s" % self.sendGCode('\n'.join(self.blocks[j]),j))
+            time.sleep(3)
+
 
     ##  Get the serial port string of this connection.
     #   \return serial port
     def getSerialPort(self):
         return self._serial_port
+
+    def connectPrinterInfo(self):
+        self._printer_info_thread.start()
 
     ##  Try to connect the serial. This simply starts the thread, which runs _connect.
     def connect(self):
@@ -207,6 +251,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             self._connect_thread.start()
 
     ##  Private fuction (threaded) that actually uploads the firmware.
+    
     def _updateFirmware(self):
         if self._is_connecting or  self._is_connected:
             self.close()
@@ -252,6 +297,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def startPollEndstop(self):
         self._poll_endstop = True
         self._end_stop_thread.start()
+
 
     @pyqtSlot()
     def stopPollEndstop(self):
@@ -306,6 +352,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         #                 self._serial.timeout = 2 #Reset serial timeout
         self.setIsConnected(True)
         Logger.log("i", "Established printer connection on port %s" % self._serial_port)
+        self.connectPrinterInfo()
         return 
 
         #         self._sendCommand("M105") # Send M105 as long as we are listening, otherwise we end up in an undefined state
@@ -459,7 +506,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     #   \param temperature recieved temperature
     def _setExtruderTemperature(self, index, temperature):
         try: 
-            self._extruder_temperatures[index] = temperature
+            ##self._extruder_temperatures[index] = temperature
             self.extruderTemperatureChanged.emit()
         except Exception as e:
             pass
@@ -474,137 +521,20 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def requestWrite(self, node, file_name = None):
         self.showControlInterface()
 
-    def _setEndstopState(self, endstop_key, value):
-        if endstop_key == b'x_min':
-            if self._x_min_endstop_pressed != value:
-                self.endstopStateChanged.emit('x_min', value)
-            self._x_min_endstop_pressed = value
-        elif endstop_key == b'y_min':
-            if self._y_min_endstop_pressed != value:
-                self.endstopStateChanged.emit('y_min', value)
-            self._y_min_endstop_pressed = value
-        elif endstop_key == b'z_min':
-            if self._z_min_endstop_pressed != value:
-                self.endstopStateChanged.emit('z_min', value)
-            self._z_min_endstop_pressed = value
-
-    ##  Listen thread function. 
-    # def _listen(self):
-    #     Logger.log("i", "Printer connection listen thread started for %s" % self._serial_port)
-    #     temperature_request_timeout = time.time()
-    #     ok_timeout = time.time()
-    #     while self._is_connected:
-    #         line = self._readline()
-
-    #         if line is None: 
-    #             break # None is only returned when something went wrong. Stop listening
-
-    #         if time.time() > temperature_request_timeout:
-    #             if self._extruder_count > 0:
-    #                 self._temperature_requested_extruder_index = (self._temperature_requested_extruder_index + 1) % self._extruder_count
-    #                 self.sendCommand("M105 T%d" % (self._temperature_requested_extruder_index))
-    #             else:
-    #                 self.sendCommand("M105")
-    #             temperature_request_timeout = time.time() + 5
-
-    #         if line.startswith(b"Error:"):
-    #             # Oh YEAH, consistency.
-    #             # Marlin reports an MIN/MAX temp error as "Error:x\n: Extruder switched off. MAXTEMP triggered !\n"
-    #             #       But a bed temp error is reported as "Error: Temperature heated bed switched off. MAXTEMP triggered !!"
-    #             #       So we can have an extra newline in the most common case. Awesome work people.
-    #             if re.match(b"Error:[0-9]\n", line):
-    #                 line = line.rstrip() + self._readline()
-
-    #             # Skip the communication errors, as those get corrected.
-    #             if b"Extruder switched off" in line or b"Temperature heated bed switched off" in line or b"Something is wrong, please turn off the printer." in line:
-    #                 if not self.hasError():
-    #                     self._setErrorState(line[6:])
-
-    #         elif b" T:" in line or line.startswith(b"T:"): #Temperature message
-    #             try: 
-    #                 self._setExtruderTemperature(self._temperature_requested_extruder_index,float(re.search(b"T: *([0-9\.]*)", line).group(1)))
-    #             except:
-    #                 pass
-    #             if b"B:" in line: # Check if it"s a bed temperature
-    #                 try:
-    #                     self._setBedTemperature(float(re.search(b"B: *([0-9\.]*)", line).group(1)))
-    #                 except Exception as e:
-    #                     pass
-    #             #TODO: temperature changed callback
-    #         elif b"_min" in line or b"_max" in line:
-    #             tag, value = line.split(b':', 1)
-    #             self._setEndstopState(tag,(b'H' in value or b'TRIGGERED' in value))
-
-    #         if self._is_printing:
-    #             if line == b"" and time.time() > ok_timeout:
-    #                 line = b"ok" # Force a timeout (basicly, send next command)
-
-    #             if b"ok" in line:
-    #                 ok_timeout = time.time() + 5
-    #                 if not self._command_queue.empty():
-    #                     self._sendCommand(self._command_queue.get())
-    #                 else:
-    #                     self._sendNextGcodeLine()
-    #             elif b"resend" in line.lower() or b"rs" in line: # Because a resend can be asked with "resend" and "rs"
-    #                 try:
-    #                     self._gcode_position = int(line.replace(b"N:",b" ").replace(b"N",b" ").replace(b":",b" ").split()[-1])
-    #                 except:
-    #                     if b"rs" in line:
-    #                         self._gcode_position = int(line.split()[1])
-
-    #         else: # Request the temperature on comm timeout (every 2 seconds) when we are not printing.)
-    #             if line == b"":
-    #                 if self._extruder_count > 0:
-    #                     self._temperature_requested_extruder_index = (self._temperature_requested_extruder_index + 1) % self._extruder_count
-    #                     self.sendCommand("M105 T%d" % self._temperature_requested_extruder_index)
-    #                 else:
-    #                     self.sendCommand("M105")
-    #     Logger.log("i", "Printer connection listen thread stopped for %s" % self._serial_port)
-
-    ##  Send next Gcode in the gcode list
-    def _sendNextGcodeLine(self):
-        if self._gcode_position >= len(self._gcode):
-            return
-        if self._gcode_position == 100:
-            self._print_start_time_100 = time.time()
-        line = self._gcode[self._gcode_position]
-
-        if ";" in line:
-            line = line[:line.find(";")]
-        line = line.strip()
-        try:
-            if line == "M0" or line == "M1":
-                line = "M105"   #Don"t send the M0 or M1 to the machine, as M0 and M1 are handled as an LCD menu pause.
-            if ("G0" in line or "G1" in line) and "Z" in line:
-                z = float(re.search("Z([0-9\.]*)", line).group(1))
-                if self._current_z != z:
-                    self._current_z = z
-        except Exception as e:
-            Logger.log("e", "Unexpected error with printer connection: %s" % e)
-            self._setErrorState("Unexpected error: %s" %e)
-        checksum = functools.reduce(lambda x,y: x^y, map(ord, "N%d%s" % (self._gcode_position, line)))
-
-        self._sendCommand("N%d%s*%d" % (self._gcode_position, line, checksum))
-        self._gcode_position += 1 
-        self.setProgress(( self._gcode_position / len(self._gcode)) * 100)
-        self.progressChanged.emit()
-
     ##  Set the progress of the print. 
     #   It will be normalized (based on max_progress) to range 0 - 100
     def setProgress(self, progress, max_progress = 100):
         self._progress  = (progress / max_progress) * 100 #Convert to scale of 0-100
         self.progressChanged.emit()
-
+    
     ##  Cancel the current print. Printer connection wil continue to listen.
     @pyqtSlot()
     def cancelPrint(self):
-        self._gcode_position = 0
-        self.setProgress(0)
-        self._gcode = []
-
-        # Turn of temperatures
-        self._sendCommand("M140 S0")
-        self._sendCommand("M104 S0")
+        self.httppost(self._serial_port,"/d3dapi/printer/stop",{
+            'gcode': 'M104 S0\nG28'
+        })
+        ## Turn of temperatures
+        ## self._sendCommand("M104 S0")
         self._is_printing = False
 
     ##  Check if the process did not encounter an error yet.
@@ -633,23 +563,48 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def _onFirmwareUpdateComplete(self):
         self._update_firmware_thread.join()
         self._update_firmware_thread = threading.Thread(target= self._updateFirmware)
-        self._update_firmware_thread.deamon = True
+        self._update_firmware_thread.daemon = True
 
         self.connect()
 
+
     def httppost(self,domain,path,data):
-        print('post: ',domain,path)
-        print('  data: ',data)
-        # jsonData = json.dump(data)
-        # print('  json: ',jsonData)
         params = urllib.parse.urlencode(data)
-        print('  params: ',params)
         headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}
+
         connect = http.client.HTTPConnection(domain)
         connect.request("POST", path, params, headers)
+
+        response = connect.getresponse()
+        jsonresponse = response.read()
+        return json.loads(jsonresponse.decode())
+
+    def getPrinterInfo(self):
+        while True:
+            self.stateReply = self.get(self._serial_port,"/d3dapi/info/status")
+            Logger.log("d", "stateReply is: %s" % self.stateReply)
+            ##Get Extruder Temperature and emit it to the pyqt framework
+            self.extTemperature = self.stateReply['data']['hotend']
+            self.extruderTemperatureChanged.emit()
+            Logger.log("d", "extTemperature is: %s" % self.extTemperature)
+            ##Get currentLine in printing and emit it to the pyqt framework
+            ##if self.stateReply['data']['state'] != "idle" or self.stateReply['data']['state'] != "disconnected":
+            if self.stateReply['data']['current_line']:
+                self.currentline = self.stateReply['data']['current_line']
+                Logger.log("d", "currentLine is: %s" % self.currentLine)
+                Logger.log("d", "totalLines is: %s" % self.totalLines)
+                self.setProgress((self.currentLine / self.totalLines) * 100)
+            else:
+                pass
+            ##wait 5 seconds before updating info
+            time.sleep(5)
+
+    def get (self,domain,path):
+        print('get: ',domain,path)
+        connect = http.client.HTTPConnection(domain)
+        connect.request("GET", path)
         response = connect.getresponse()
         print('  response: ',response.status, response.reason)
         jsonresponse = response.read()
         print('  ',jsonresponse)
         return json.loads(jsonresponse.decode())
-
