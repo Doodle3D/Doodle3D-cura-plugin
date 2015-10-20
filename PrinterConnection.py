@@ -87,6 +87,10 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         # Number of extruders
         self._extruder_count = 1
 
+        self.extTemperature = 0
+        self.currentLine = 0
+        self.totalLines = 0
+
         # Temperatures of all extruders
         self._extruder_temperatures = [0] * self._extruder_count
 
@@ -126,6 +130,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._printing_thread = threading.Thread(target = self.printGCode)
         self._printing_thread.daemon = True
+        self._printing_thread.start()
 
     onError = pyqtSignal()
     progressChanged = pyqtSignal()
@@ -187,7 +192,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             self._is_printing = True
             gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
             Logger.log("d", "gcode_list is: %s" % gcode_list)
-            self._printing_thread.start()
             self.printGCode(gcode_list)
         else:
             pass
@@ -232,6 +236,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             successful = False
             while not successful:
                 self.storedGCodeResponse = self.sendGCode('\n'.join(self.blocks[j]),j)
+                time.sleep(5)
                 if self.storedGCodeResponse['status'] == "success":
                     self.storedGCodeResponse = []
                     successful = True     
@@ -540,7 +545,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         "User-Agent": "Cura Doodle3D connection"
         }
 
-        connect = http.client.HTTPConnection(domain)
+        connect = http.client.HTTPConnection(domain, 80, timeout=5)
         connect.request("POST", path, params, headers)
 
         response = connect.getresponse()
@@ -550,10 +555,9 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def getPrinterInfo(self):
         while True:
             self.stateReply = self.get(self._serial_port,"/d3dapi/info/status")
-            Logger.log("d", "stateReply is: %s" % self.stateReply)
-            ##Get Extruder Temperature and emit it to the pyqt framework
-            
             if self.stateReply['data']['hotend']:
+                Logger.log("d", "stateReply is: %s" % self.stateReply)
+            ##Get Extruder Temperature and emit it to the pyqt framework
                 self.extTemperature = self.stateReply['data']['hotend']
                 self.extruderTemperatureChanged.emit()
             else:
@@ -563,14 +567,14 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             ##if self.stateReply['data']['state'] != "idle" or self.stateReply['data']['state'] != "disconnected":
             if self.stateReply['data']['state'] == "printing":
                 self.currentLine = self.stateReply['data']['current_line']
-                Logger.log("d", "currentLine is: %s" % self.currentLine)
+                ##Logger.log("d", "currentLine is: %s" % self.currentLine)
                 Logger.log("d", "totalLines is: %s" % self.totalLines)
                 self.setProgress((self.currentLine / self.totalLines) * 100)
-                time.sleep(2)
+                time.sleep(4)
             else:
                 ##wait 5 seconds before updating info
-                self.setProgress(0)
-                time.sleep(2)
+                self.setProgress(0,0)
+                time.sleep(10)
             
             
 
