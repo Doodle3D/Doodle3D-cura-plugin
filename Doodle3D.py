@@ -1,5 +1,7 @@
-# Copyright (c) 2015 Ultimaker B.V.
+# Doodle3D Cura Plugin for Doodle3D WiFi-Box support. Copyright (c) 2015 Doodle3D
+# Based on the Ultimaker's USBPrinting Plugin
 # Cura is released under the terms of the AGPLv3 or higher.
+# The Doodle3D Cura Plugin is released under the terms of the AGPLv3 or higher.
 
 from UM.Signal import Signal, SignalEmitter
 from . import PrinterConnection
