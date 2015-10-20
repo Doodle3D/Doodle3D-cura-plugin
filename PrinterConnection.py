@@ -64,10 +64,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._progress = 0
 
-        ##self._listen_thread = threading.Thread(target=self._listen)
-        ##self._listen_thread.daemon = True
-        self._blockIndex = None
-
         self._update_firmware_thread = threading.Thread(target= self._updateFirmware)
         self._update_firmware_thread.daemon = True
         
@@ -126,6 +122,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._printer_info_thread = threading.Thread(target = self.getPrinterInfo)
         self._printer_info_thread.daemon = True
+        self.connectPrinterInfo()
 
         self._printing_thread = threading.Thread(target = self.printGCode)
         self._printing_thread.daemon = True
@@ -184,17 +181,16 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     @pyqtSlot()
     def startPrint(self):
-        ##if (self.stateReply['data']['state'] == "idle" or stateReply['data']['state'] == 'buffering'):
-        Logger.log("d", "startPrint wordt uitgevoerd")
-        self.writeStarted.emit(self)
-        self._blockIndex = 0
-        gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
-        Logger.log("d", "gcode_list is: %s" % gcode_list)
-        self.printGCode(gcode_list)
-        self._printing_thread.start()
-        
-        ## else:
-        ##     Logger.log("d","hijs al bezig")
+        if self.stateReply['data']['state'] == "idle":
+            Logger.log("d", "startPrint wordt uitgevoerd")
+            self.writeStarted.emit(self)
+            self._is_printing = True
+            gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
+            Logger.log("d", "gcode_list is: %s" % gcode_list)
+            self._printing_thread.start()
+            self.printGCode(gcode_list)
+        else:
+            pass
 
     ##  Start a print based on a g-code.
     #   \param gcode_list List with gcode (strings).
@@ -230,12 +226,19 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         ## Size of the print defined in total lines so we can use it to calculate the progress bar
         Logger.log("d","totalLines is: %s" % self.totalLines)
-        
-        for j in range(len(self.blocks)):
-            Logger.log("d", "Block sending")
-            Logger.log("d", "response is: %s" % self.sendGCode('\n'.join(self.blocks[j]),j))
-            time.sleep(3)
 
+        for j in range(len(self.blocks)):
+            ##Logger.log("d", "Block sending")
+            successful = False
+            while not successful:
+                self.storedGCodeResponse = self.sendGCode('\n'.join(self.blocks[j]),j)
+                if self.storedGCodeResponse['status'] == "success":
+                    self.storedGCodeResponse = []
+                    successful = True     
+                else:
+                    Logger.log("d","Couldn't send the block")
+                    #Send the failed block again after 15 seconds
+                    time.sleep(15)
 
     ##  Get the serial port string of this connection.
     #   \return serial port
@@ -312,47 +315,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def _connect(self):
         Logger.log("d", "Attempting to connect to %s", self._serial_port)
         self._is_connecting = True
-        # programmer = stk500v2.Stk500v2()
-        # try:
-        #     programmer.connect(self._serial_port) # Connect with the serial, if this succeeds, it"s an arduino based usb device.
-        #     self._serial = programmer.leaveISP()
-        # except ispBase.IspError as e:
-        #     Logger.log("i", "Could not establish connection on %s: %s. Device is not arduino based." %(self._serial_port,str(e)))
-        # except Exception as e:
-        #     Logger.log("i", "Could not establish connection on %s, unknown reasons.  Device is not arduino based." % self._serial_port)
-
-        # # If the programmer connected, we know its an atmega based version. Not all that usefull, but it does give some debugging information.
-        # for baud_rate in self._getBaudrateList(): # Cycle all baud rates (auto detect)
-        #     Logger.log("d","Attempting to connect to printer with serial %s on baud rate %s", self._serial_port, baud_rate)
-        #     if self._serial is None:
-        #         try:
-        #             self._serial = serial.Serial(str(self._serial_port), baud_rate, timeout = 3, writeTimeout = 10000)
-        #         except serial.SerialException:
-        #             #Logger.log("i", "Could not open port %s" % self._serial_port)
-        #             continue
-        #     else:
-        #         if not self.setBaudRate(baud_rate):
-        #             continue # Could not set the baud rate, go to the next
-
-        #     time.sleep(1.5) # Ensure that we are not talking to the bootloader. 1.5 sec seems to be the magic number
-        #     sucesfull_responses = 0
-        #     timeout_time = time.time() + 5
-        #     self._serial.write(b"\n")
-        #     self._sendCommand("M105")  # Request temperature, as this should (if baudrate is correct) result in a command with "T:" in it
-        #     while timeout_time > time.time():
-        #         line = self._readline()
-        #         if line is None:
-        #             self.setIsConnected(False) # Something went wrong with reading, could be that close was called.
-        #             return
-                
-        #         if b"T:" in line:
-        #             self._serial.timeout = 0.5
-        #             sucesfull_responses += 1
-        #             if sucesfull_responses >= self._required_responses_auto_baud:
-        #                 self._serial.timeout = 2 #Reset serial timeout
         self.setIsConnected(True)
         Logger.log("i", "Established printer connection on port %s" % self._serial_port)
-        self.connectPrinterInfo()
         return 
 
         #         self._sendCommand("M105") # Send M105 as long as we are listening, otherwise we end up in an undefined state
@@ -570,7 +534,11 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     def httppost(self,domain,path,data):
         params = urllib.parse.urlencode(data)
-        headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}
+        headers = {
+        "Content-type": "x-www-form-urlencoded", 
+        "Accept": "text/plain", 
+        "User-Agent": "Cura Doodle3D connection"
+        }
 
         connect = http.client.HTTPConnection(domain)
         connect.request("POST", path, params, headers)
@@ -584,27 +552,31 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             self.stateReply = self.get(self._serial_port,"/d3dapi/info/status")
             Logger.log("d", "stateReply is: %s" % self.stateReply)
             ##Get Extruder Temperature and emit it to the pyqt framework
-            self.extTemperature = self.stateReply['data']['hotend']
-            self.extruderTemperatureChanged.emit()
-            Logger.log("d", "extTemperature is: %s" % self.extTemperature)
+            
+            if self.stateReply['data']['hotend']:
+                self.extTemperature = self.stateReply['data']['hotend']
+                self.extruderTemperatureChanged.emit()
+            else:
+                continue
+            
             ##Get currentLine in printing and emit it to the pyqt framework
             ##if self.stateReply['data']['state'] != "idle" or self.stateReply['data']['state'] != "disconnected":
-            if self.stateReply['data']['current_line']:
-                self.currentline = self.stateReply['data']['current_line']
+            if self.stateReply['data']['state'] == "printing":
+                self.currentLine = self.stateReply['data']['current_line']
                 Logger.log("d", "currentLine is: %s" % self.currentLine)
                 Logger.log("d", "totalLines is: %s" % self.totalLines)
                 self.setProgress((self.currentLine / self.totalLines) * 100)
+                time.sleep(2)
             else:
-                pass
-            ##wait 5 seconds before updating info
-            time.sleep(5)
+                ##wait 5 seconds before updating info
+                self.setProgress(0)
+                time.sleep(2)
+            
+            
 
     def get (self,domain,path):
-        print('get: ',domain,path)
         connect = http.client.HTTPConnection(domain)
         connect.request("GET", path)
         response = connect.getresponse()
-        print('  response: ',response.status, response.reason)
         jsonresponse = response.read()
-        print('  ',jsonresponse)
         return json.loads(jsonresponse.decode())

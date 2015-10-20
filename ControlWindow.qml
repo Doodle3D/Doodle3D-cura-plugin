@@ -10,7 +10,7 @@ import UM 1.1 as UM
 
 UM.Dialog
 {
-    width: 200 * Screen.devicePixelRatio;
+    width: 300 * Screen.devicePixelRatio;
     height: 100 * Screen.devicePixelRatio;
     modality: Qt.NonModal
     id: d3dbase
