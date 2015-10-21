@@ -74,6 +74,9 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._is_printing = False
 
+        ## G-code list
+        self.gcode_list = []
+
         ## Set when print is started in order to check running time.
         self._print_start_time = None
         self._print_start_time_100 = None
@@ -130,7 +133,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._printing_thread = threading.Thread(target = self.printGCode)
         self._printing_thread.daemon = True
-        self._printing_thread.start()
 
     onError = pyqtSignal()
     progressChanged = pyqtSignal()
@@ -190,16 +192,16 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             Logger.log("d", "startPrint wordt uitgevoerd")
             self.writeStarted.emit(self)
             self._is_printing = True
-            gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
-            Logger.log("d", "gcode_list is: %s" % gcode_list)
-            self.printGCode(gcode_list)
+            ##self.printGCode(gcode_list)
+            self._printing_thread.start()
         else:
             pass
 
     ##  Start a print based on a g-code.
     #   \param gcode_list List with gcode (strings).
-    def printGCode(self, gcode_list):
-        self.joinedString = "".join(gcode_list)
+    def printGCode(self):
+        self.gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
+        self.joinedString = "".join(self.gcode_list)
 
 
         self.decodedList = []
@@ -241,9 +243,10 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                     self.storedGCodeResponse = []
                     successful = True     
                 else:
-                    Logger.log("d","Couldn't send the block")
-                    #Send the failed block again after 15 seconds
-                    time.sleep(15)
+                    Logger.log("d","Couldn't send the block")  
+                    time.sleep(15) #Send the failed block again after 15 seconds
+        ## Stop thread
+        self.setProgress(0,0)
 
     ##  Get the serial port string of this connection.
     #   \return serial port
@@ -505,6 +508,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         ## Turn of temperatures
         ## self._sendCommand("M104 S0")
         self._is_printing = False
+        self.setProgress(0,0)
 
     ##  Check if the process did not encounter an error yet.
     def hasError(self):
@@ -564,18 +568,14 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 continue
             
             ##Get currentLine in printing and emit it to the pyqt framework
-            ##if self.stateReply['data']['state'] != "idle" or self.stateReply['data']['state'] != "disconnected":
             if self.stateReply['data']['state'] == "printing":
                 self.currentLine = self.stateReply['data']['current_line']
                 ##Logger.log("d", "currentLine is: %s" % self.currentLine)
-                Logger.log("d", "totalLines is: %s" % self.totalLines)
+                ##Logger.log("d", "totalLines is: %s" % self.totalLines)
                 self.setProgress((self.currentLine / self.totalLines) * 100)
                 time.sleep(4)
             else:
-                ##wait 5 seconds before updating info
-                self.setProgress(0,0)
-                time.sleep(10)
-            
+                time.sleep(10)    
             
 
     def get (self,domain,path):
