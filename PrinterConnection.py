@@ -133,6 +133,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._printing_thread = threading.Thread(target = self.printGCode)
         self._printing_thread.daemon = True
+        ## Should only start thread once
+        self.startedThread = False
 
     onError = pyqtSignal()
     progressChanged = pyqtSignal()
@@ -191,62 +193,74 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         if self.stateReply['data']['state'] == "idle":
             Logger.log("d", "startPrint wordt uitgevoerd")
             self.writeStarted.emit(self)
-            self._is_printing = True
             ##self.printGCode(gcode_list)
-            self._printing_thread.start()
+            if self.startedThread is False:
+                self._printing_thread.start()
+                self.startedThread = True
+
+            elif self.startedThread is True:
+                self._is_printing = False
+            else:
+                pass
+
         else:
             pass
 
     ##  Start a print based on a g-code.
     #   \param gcode_list List with gcode (strings).
     def printGCode(self):
-        self.gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
-        self.joinedString = "".join(self.gcode_list)
+        while True:
+            if self._is_printing is False:
+                self._is_printing = True
+                self.gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
+                self.joinedString = "".join(self.gcode_list)
 
 
-        self.decodedList = []
-        self.decodedList = self.joinedString.split('\n')
+                self.decodedList = []
+                self.decodedList = self.joinedString.split('\n')
 
-        Logger.log("d", "decodedList is: %s" % self.decodedList)
+                Logger.log("d", "decodedList is: %s" % self.decodedList)
 
-        self.blocks = []
-        self.tempBlock = []
-
-        for i in range(len(self.decodedList)):
-            self.tempBlock.append(self.decodedList[i])
-
-            if sys.getsizeof(self.tempBlock) > 7000:
-                self.blocks.append(self.tempBlock)
-                Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
-                ##self.getPrinterInfo()
-                ##Logger.log("d", "self.extTemperature is: %s" % self.extTemperature)
+                blocks = []
                 self.tempBlock = []
-                ##self.setProgress((  / self.totalLines) * 100)
-                ##self.progressChanged.emit()
 
-        
-        self.blocks.append(self.tempBlock)
-        self.tempBlock = []
-        
-        self.totalLines = self.joinedString.count('\n') - self.joinedString.count('\n;') - len(self.blocks)
+                for i in range(len(self.decodedList)):
+                    self.tempBlock.append(self.decodedList[i])
 
-        ## Size of the print defined in total lines so we can use it to calculate the progress bar
-        Logger.log("d","totalLines is: %s" % self.totalLines)
+                    if sys.getsizeof(self.tempBlock) > 7000:
+                        self.blocks.append(self.tempBlock)
+                        Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
+                        ##self.getPrinterInfo()
+                        ##Logger.log("d", "self.extTemperature is: %s" % self.extTemperature)
+                        self.tempBlock = []
+                        ##self.setProgress((  / self.totalLines) * 100)
+                        ##self.progressChanged.emit()
 
-        for j in range(len(self.blocks)):
-            ##Logger.log("d", "Block sending")
-            successful = False
-            while not successful:
-                self.storedGCodeResponse = self.sendGCode('\n'.join(self.blocks[j]),j)
-                time.sleep(5)
-                if self.storedGCodeResponse['status'] == "success":
-                    self.storedGCodeResponse = []
-                    successful = True     
-                else:
-                    Logger.log("d","Couldn't send the block")  
-                    time.sleep(15) #Send the failed block again after 15 seconds
-        ## Stop thread
-        self.setProgress(0,0)
+                
+                blocks.append(self.tempBlock)
+                self.tempBlock = []
+                
+                self.totalLines = self.joinedString.count('\n') - self.joinedString.count('\n;') - len(blocks)
+
+                ## Size of the print defined in total lines so we can use it to calculate the progress bar
+                Logger.log("d","totalLines is: %s" % self.totalLines)
+
+                for j in range(len(blocks)):
+                    successful = False
+                    while not successful:
+                        try: 
+                            Response = self.sendGCode('\n'.join(blocks[j]),j)
+                            if Response['status'] == "success":
+                                successful = True   
+                            else:
+                                time.sleep(5)
+
+                        except:
+                            Logger.log("d","Couldn't send the block")  
+                            time.sleep(15) #Send the failed block again after 15 seconds
+            else:
+                pass
+
 
     ##  Get the serial port string of this connection.
     #   \return serial port
@@ -507,8 +521,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         })
         ## Turn of temperatures
         ## self._sendCommand("M104 S0")
-        self._is_printing = False
-        self.setProgress(0,0)
+        self.setProgress(0,100)
 
     ##  Check if the process did not encounter an error yet.
     def hasError(self):
@@ -558,24 +571,27 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     def getPrinterInfo(self):
         while True:
-            self.stateReply = self.get(self._serial_port,"/d3dapi/info/status")
-            if self.stateReply['data']['hotend']:
-                Logger.log("d", "stateReply is: %s" % self.stateReply)
-            ##Get Extruder Temperature and emit it to the pyqt framework
-                self.extTemperature = self.stateReply['data']['hotend']
-                self.extruderTemperatureChanged.emit()
-            else:
-                continue
-            
-            ##Get currentLine in printing and emit it to the pyqt framework
-            if self.stateReply['data']['state'] == "printing":
-                self.currentLine = self.stateReply['data']['current_line']
-                ##Logger.log("d", "currentLine is: %s" % self.currentLine)
-                ##Logger.log("d", "totalLines is: %s" % self.totalLines)
-                self.setProgress((self.currentLine / self.totalLines) * 100)
-                time.sleep(4)
-            else:
-                time.sleep(10)    
+            try:
+                self.stateReply = self.get(self._serial_port,"/d3dapi/info/status")
+                if self.stateReply['data']['hotend']:
+                    Logger.log("d", "stateReply is: %s" % self.stateReply)
+                ##Get Extruder Temperature and emit it to the pyqt framework
+                    self.extTemperature = self.stateReply['data']['hotend']
+                    self.extruderTemperatureChanged.emit()
+                else:
+                    continue
+                
+                if self.stateReply['data']['state'] == "printing":
+                    self.currentLine = self.stateReply['data']['current_line']
+                    ##Logger.log("d", "currentLine is: %s" % self.currentLine)
+                    ##Logger.log("d", "totalLines is: %s" % self.totalLines)
+                    self.setProgress((self.currentLine / self.totalLines) * 100)
+                    time.sleep(4)
+                else:
+                    self.setProgress(0,100)
+                    time.sleep(10)
+            except:
+                time.sleep(3)
             
 
     def get (self,domain,path):
