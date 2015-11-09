@@ -10,6 +10,7 @@ import UM 1.1 as UM
 
 UM.Dialog
 {
+<<<<<<< HEAD
     width: 400;
     height: 143;
 
@@ -18,6 +19,10 @@ UM.Dialog
 
     maximumWidth: 400;
     maximumHeight:143;
+=======
+    width: 400 * Screen.devicePixelRatio;
+    height: 100 * Screen.devicePixelRatio;
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
     modality: Qt.NonModal
     id: d3dbase
 

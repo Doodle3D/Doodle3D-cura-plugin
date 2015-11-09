@@ -56,11 +56,36 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         # Printer is connecting
         self._is_connecting = False
 
+<<<<<<< HEAD
         # Printer is printing
         self._is_printing = False
 
         # Progress of the print
         self._progress = 0
+=======
+        # The baud checking is done by sending a number of m105 commands to the printer and waiting for a readable
+        # response. If the baudrate is correct, this should make sense, else we get giberish.
+        self._required_responses_auto_baud = 3
+
+        self._progress = 0
+
+        self._update_firmware_thread = threading.Thread(target= self._updateFirmware)
+        self._update_firmware_thread.daemon = True
+        
+        self._heatup_wait_start_time = time.time()
+
+        ## Queue for commands that need to be send. Used when command is sent when a print is active.
+        self._command_queue = queue.Queue()
+
+        self._is_printing = False
+
+        ## G-code list
+        self.gcode_list = []
+
+        ## Set when print is started in order to check running time.
+        self._print_start_time = None
+        self._print_start_time_100 = None
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
 
         self.heatedUp = False
         # Gcode
@@ -71,8 +96,17 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         self._printPhase = ""
 
+<<<<<<< HEAD
         # Current line (in the gcode_list) in printing
         self.currentLine = 0
+=======
+        self.extTemperature = 0
+        self.currentLine = 0
+        self.totalLines = 0
+
+        # Temperatures of all extruders
+        self._extruder_temperatures = [0] * self._extruder_count
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
 
         # Total lines that's gonna be printed
         self.totalLines = 0
@@ -157,6 +191,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def startPrint(self):
         if self.stateReply['data']['state'] == "idle":
             Logger.log("d", "startPrint wordt uitgevoerd")
+<<<<<<< HEAD
             if self.startedThread is False:
                 self._printing_thread.start()
                 self.startedThread = True
@@ -167,6 +202,22 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             pass
 
 
+=======
+            self.writeStarted.emit(self)
+            ##self.printGCode(gcode_list)
+            if self.startedThread is False:
+                self._printing_thread.start()
+                self.startedThread = True
+
+            elif self.startedThread is True:
+                self._is_printing = False
+            else:
+                pass
+
+        else:
+            pass
+
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
     ##  Start a print based on a g-code.
     #   \param gcode_list List with gcode (strings).
     def printGCode(self):
@@ -188,10 +239,21 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 for i in range(len(self.decodedList)):
                     self.tempBlock.append(self.decodedList[i])
 
+<<<<<<< HEAD
                     if sys.getsizeof(self.tempBlock) > 30000:
                         blocks.append(self.tempBlock)
                         Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
                         self.tempBlock = []
+=======
+                    if sys.getsizeof(self.tempBlock) > 7000:
+                        self.blocks.append(self.tempBlock)
+                        Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
+                        ##self.getPrinterInfo()
+                        ##Logger.log("d", "self.extTemperature is: %s" % self.extTemperature)
+                        self.tempBlock = []
+                        ##self.setProgress((  / self.totalLines) * 100)
+                        ##self.progressChanged.emit()
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
 
                 
                 blocks.append(self.tempBlock)
@@ -202,22 +264,33 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 ## Size of the print defined in total lines so we can use it to calculate the progress bar
                 Logger.log("d","totalLines is: %s" % self.totalLines)
 
+<<<<<<< HEAD
                 currentblock = 0
                 total = len(blocks)
 
+=======
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
                 for j in range(len(blocks)):
                     successful = False
                     while not successful:
                         try: 
                             Response = self.sendGCode('\n'.join(blocks[j]),j)
                             if Response['status'] == "success":
+<<<<<<< HEAD
                                 successful = True
                                 currentblock+=1
                                 Logger.log("d", "Successfully sent block %s from %s" % (currentblock, total))
+=======
+                                successful = True   
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
                             else:
                                 time.sleep(5)
 
                         except:
+<<<<<<< HEAD
+=======
+                            Logger.log("d","Couldn't send the block")  
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
                             time.sleep(15) #Send the failed block again after 15 seconds
             else:
                 pass
@@ -320,6 +393,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     ##  Cancel the current print. Printer connection wil continue to listen.
     @pyqtSlot()
     def cancelPrint(self):
+<<<<<<< HEAD
         """
         self.printersetting = Application.getInstance().getMachineManager().getActiveMachineInstance().getMachineSettingValue("machine_start_gcode")
         Logger.log("d","printer setting is: %s" % self.printersetting)
@@ -348,6 +422,55 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         params = urllib.parse.urlencode(data)
         headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}
         connect = http.client.HTTPConnection(domain, 80, timeout=30)
+=======
+        self.httppost(self._serial_port,"/d3dapi/printer/stop",{
+            'gcode': 'M104 S0\nG28'
+        })
+        ## Turn of temperatures
+        ## self._sendCommand("M104 S0")
+        self.setProgress(0,100)
+
+    ##  Check if the process did not encounter an error yet.
+    def hasError(self):
+        return self._error_state != None
+
+    ##  private read line used by printer connection to listen for data on serial port.
+    def _readline(self):
+        if self._serial is None:
+            return None
+        try:
+            ret = self._serial.readline()
+        except Exception as e:
+            Logger.log("e","Unexpected error while reading serial port. %s" %e)
+            self._setErrorState("Printer has been disconnected") 
+            self.close()
+            return None
+        return ret
+
+    ##  Create a list of baud rates at which we can communicate.
+    #   \return list of int
+    def _getBaudrateList(self):
+        ret = [115200, 250000, 230400, 57600, 38400, 19200, 9600]
+        return ret
+
+    def _onFirmwareUpdateComplete(self):
+        self._update_firmware_thread.join()
+        self._update_firmware_thread = threading.Thread(target= self._updateFirmware)
+        self._update_firmware_thread.daemon = True
+
+        self.connect()
+
+
+    def httppost(self,domain,path,data):
+        params = urllib.parse.urlencode(data)
+        headers = {
+        "Content-type": "x-www-form-urlencoded", 
+        "Accept": "text/plain", 
+        "User-Agent": "Cura Doodle3D connection"
+        }
+
+        connect = http.client.HTTPConnection(domain, 80, timeout=5)
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
         connect.request("POST", path, params, headers)
         response = connect.getresponse()
         jsonresponse = response.read()
@@ -358,6 +481,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             try:
                 self.stateReply = self.get(self._serial_port,"/d3dapi/info/status")
                 if self.stateReply['data']['hotend']:
+<<<<<<< HEAD
                     ##Logger.log("d", "stateReply is: %s" % self.stateReply)
 
                     ##Get Extruder Temperature and emit it to the pyqt framework
@@ -372,11 +496,18 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                     self.printerState = self.stateReply['data']['state']
                     self.printerStateChanged.emit()
 
+=======
+                    Logger.log("d", "stateReply is: %s" % self.stateReply)
+                ##Get Extruder Temperature and emit it to the pyqt framework
+                    self.extTemperature = self.stateReply['data']['hotend']
+                    self.extruderTemperatureChanged.emit()
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
                 else:
                     continue
                 
                 if self.stateReply['data']['state'] == "printing":
                     self.currentLine = self.stateReply['data']['current_line']
+<<<<<<< HEAD
                     if (self.extTemperature/self.extTargetTemperature)*100<100 and self.heatedUp==False:
                         self.setProgress((self.extTemperature / self.extTargetTemperature) * 100)
                         self._printPhase = "Heating up... "
@@ -399,6 +530,15 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                     
                     
 
+=======
+                    ##Logger.log("d", "currentLine is: %s" % self.currentLine)
+                    ##Logger.log("d", "totalLines is: %s" % self.totalLines)
+                    self.setProgress((self.currentLine / self.totalLines) * 100)
+                    time.sleep(4)
+                else:
+                    self.setProgress(0,100)
+                    time.sleep(10)
+>>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
             except:
                 time.sleep(3)
             
