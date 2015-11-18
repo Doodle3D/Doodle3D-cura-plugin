@@ -39,7 +39,7 @@ UM.Dialog
 
             Image {
             id: somepic;
-            source: "doodle3d.jpg"
+            source: "doodle3d.png"
             }
             Column{
                 Text {
