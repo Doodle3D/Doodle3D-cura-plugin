@@ -103,7 +103,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         return self._bedTemperature
 
     @pyqtProperty(float, notify=bedTargetTemperatureChanged)
-    def getBedTemperature(self):
+    def getBedTargetTemperature(self):
         return self._bedTargetTemperature
 
     @pyqtProperty(str, notify=printPhaseChanged)
@@ -275,43 +275,44 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def getPrinterInfo(self):
         while True:
             self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
-            if self.printerInfo is None:
-                time.sleep(3)
-                return
-            continue
 
-            if self.printerInfo['data']['hotend']:  # First checks if we can get info from the printer by looking at the availability of hotend/extruder temperature
-                self._extTemperature = self.printerInfo['data']['hotend']  # Get Extruder Temperature 
-                self._extTargetTemperature = self.printerInfo['data']['hotend_target']  # Get Extruder Target Temperature          
-                self.printerState = self.printerInfo['data']['state']  # Get the state of the printer
-                self._bedTemperature = self.printerInfo['data']['bed'] # Get bed temperature
-                self._bedTargetTemperature = self.printerInfo['data']['bed'] # Get bed target temperature
-                
-                self.extruderTemperatureChanged.emit()
-                self.extruderTargetChanged.emit() 
-                self.printerStateChanged.emit()
-                self.bedTemperatureChanged.emit()
-                self.bedTargetTemperatureChanged.emit()
+            if self.printerInfo['data']['state'] != "disconnected":
 
-            if self.printerInfo['data']['state'] == "printing":
-                self._currentLine = self.printerInfo['data']['current_line']
-                if (self._extTemperature/self._extTargetTemperature)*100 < 100 and self._heatedUp is False:
-                    self.setProgress((self._extTemperature / self._extTargetTemperature) * 100)
-                    self._printPhase = "Heating up... "
+                if self.printerInfo['data']['hotend']:  # First checks if we can get info from the printer by looking at the availability of hotend/extruder temperature
+
+
+                    self._extTemperature = self.printerInfo['data']['hotend']  # Get Extruder Temperature 
+                    self._extTargetTemperature = self.printerInfo['data']['hotend_target']  # Get Extruder Target Temperature          
+                    self.printerState = self.printerInfo['data']['state']  # Get the state of the printer
+                    self._bedTemperature = self.printerInfo['data']['bed'] # Get bed temperature
+                    self._bedTargetTemperature = self.printerInfo['data']['bed'] # Get bed target temperature
+                    
+                    self.extruderTemperatureChanged.emit()
+                    self.extruderTargetChanged.emit() 
+                    self.printerStateChanged.emit()
+                    self.bedTemperatureChanged.emit()
+                    self.bedTargetTemperatureChanged.emit()
+
+                if self.printerInfo['data']['state'] == "printing":
+                    self._currentLine = self.printerInfo['data']['current_line']
+                    if (self._extTemperature/self._extTargetTemperature)*100 < 100 and self._heatedUp is False:
+                        self.setProgress((self._extTemperature / self._extTargetTemperature) * 100)
+                        self._printPhase = "Heating up... "
+                        self.printPhaseChanged.emit()
+
+                    elif (self._currentLine / self._totalLines) * 100 < 100:
+                        self._heatedUp = True
+                        self.setProgress((self._currentLine / self._totalLines) * 100)
+                        self._printPhase = "Printing... "
+                        self.printPhaseChanged.emit()
+
+                elif self.printerInfo['data']['state'] == "idle" and self._progress > 0:
+                    self.setProgress(100, 100)
+                    self._printPhase = "Print Completed "
                     self.printPhaseChanged.emit()
+                else:
+                    self._heatedUp = False
 
-                elif (self._currentLine / self._totalLines) * 100 < 100:
-                    self._heatedUp = True
-                    self.setProgress((self._currentLine / self._totalLines) * 100)
-                    self._printPhase = "Printing... "
-                    self.printPhaseChanged.emit()
-
-            elif self.printerInfo['data']['state'] == "idle" and self._progress > 0:
-                self.setProgress(100, 100)
-                self._printPhase = "Print Completed "
-                self.printPhaseChanged.emit()
-            else:
-                self._heatedUp = False
             time.sleep(4)
 
     # HTTP GET request to the Doodle3D Wi-Fi box
