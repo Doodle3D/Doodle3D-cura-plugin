@@ -49,12 +49,15 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._extTemperature = 0     # Extruder temperature
         self._bedTemperature = 0     # Temperature of the bed
         self._extTargetTemperature = 0 # Target Extruder Temperature
+        self._bedTargetTemperature = 0 # Target Bed Temperature
 
         self._currentLine = 0         # Current line (in the gcode_list) in printing
         self._totalLines = 0          # Total lines that's gonna be printed
         self._printPhase = ""         # 3 printer phases: "Heating up... ", "Printing... " and "Print Completed "
 
         self._gcode_list = []         # Cura-generated GCode
+
+        self.printerState = ""
         #######################################################################
 
         ### Threading ###
@@ -272,7 +275,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def getPrinterInfo(self):
         while True:
             self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
-            if self.printerInfo is None or not self.printerInfo:
+            if self.printerInfo is None:
                 time.sleep(3)
                 return
             continue
