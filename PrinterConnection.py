@@ -246,9 +246,14 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     # This will show the control interface, and create the view if its not already created.
     def showControlInterface(self):
+        Logger.log("d", "showControlInterface")
+
         if self._control_view is None:
             self.createControlInterface()
         self._control_view.show()
+
+    def requestWrite(self, node, file_name = None):
+        self.showControlInterface()
 
     # Set the progress of the print. current progress and maximum progress.
     def setProgress(self, progress, max_progress=100):
