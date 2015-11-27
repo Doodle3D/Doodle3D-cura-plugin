@@ -10,7 +10,6 @@ import UM 1.1 as UM
 
 UM.Dialog
 {
-<<<<<<< HEAD
     width: 400;
     height: 143;
 
@@ -19,10 +18,6 @@ UM.Dialog
 
     maximumWidth: 400;
     maximumHeight:143;
-=======
-    width: 400 * Screen.devicePixelRatio;
-    height: 100 * Screen.devicePixelRatio;
->>>>>>> 43e1a0231bfa300d63e65959474bf3f137e7e620
     modality: Qt.NonModal
     id: d3dbase
 
@@ -39,26 +34,26 @@ UM.Dialog
 
             Image {
             id: somepic;
-            source: "doodle3d.jpg"
+            source: "doodle3d.png"
             }
             Column{
                 Text {
-                text: catalog.i18nc("@label","Extruder Temperature: %1").arg(manager.extruderTemperature)
+                text: catalog.i18nc("@label","Extruder Temperature: %1").arg(manager.getExtruderTemperature)
                 anchors.bottom: somepic.bottom
                 }
 
                 Text {
-                text: catalog.i18nc("@label","Extruder Target: %1").arg(manager.extruderTarget)
+                text: catalog.i18nc("@label","Extruder Target: %1").arg(manager.getExtruderTargetTemperature)
                 anchors.bottom: somepic.bottom
                 }
 
                 Text {
-                text: catalog.i18nc("@label","Bed Temperature: %1").arg(manager.bedTemperature)
+                text: catalog.i18nc("@label","Bed Temperature: %1").arg(manager.getBedTemperature)
                 anchors.bottom: somepic.bottom
                 }
 
                 Text {
-                text: catalog.i18nc("@label","Printer State: %1").arg(manager.printerStateGet)
+                text: catalog.i18nc("@label","Printer State: %1").arg(manager.getPrinterState)
                 anchors.bottom: somepic.bottom
                 }
             }
@@ -73,13 +68,13 @@ UM.Dialog
             anchors.right: parent.right;
             minimumValue: 0;
             maximumValue: 100;
-            value: manager.progress
+            value: manager.getProgress
             Text
             {
                 //: USB Printing dialog label, %1 is printer state
-                text: catalog.i18nc("@label","%1%").arg(manager.printPhase + "" + manager.progress)
+                text: catalog.i18nc("@label","%1%").arg(manager.getPrintPhase + "" + manager.getProgress)
                 anchors.centerIn: parent
-                visible: manager.progress >0 ? true : false
+                visible: manager.getProgress >0 ? true : false
             }
         }
     }
@@ -104,7 +99,7 @@ UM.Dialog
             onClicked: { 
                 manager.startPrint()
             }
-            enabled: manager.progress == 0 ? true : false
+            enabled: manager.getProgress == 0 ? true : false
         }
     ]
 }
