@@ -11,13 +11,13 @@ import UM 1.1 as UM
 UM.Dialog
 {
     width: 400;
-    height: 183;
+    height: 143;
 
     minimumWidth: 400;
-    minimumHeight: 183;
+    minimumHeight: 143;
 
     maximumWidth: 400;
-    maximumHeight: 183;
+    maximumHeight:143;
     modality: Qt.NonModal
     id: d3dbase
 
@@ -33,29 +33,28 @@ UM.Dialog
             spacing: UM.Theme.sizes.default_margin.width;
 
             Image {
-                id: somepic;
-                source: "doodle3d.png"
+            id: somepic;
+            source: "doodle3d.png"
             }
-
             Column{
                 Text {
-                    text: catalog.i18nc("@label","Extruder Temperature: %1").arg(manager.getExtruderTemperature)
-                    // anchors.bottom: somepic.bottom
+                text: catalog.i18nc("@label","Extruder Temperature: %1").arg(manager.getExtruderTemperature)
+                anchors.bottom: somepic.bottom
                 }
 
                 Text {
-                    text: catalog.i18nc("@label","Extruder Target: %1").arg(manager.getExtruderTargetTemperature)
-                    // anchors.bottom: somepic.bottom
+                text: catalog.i18nc("@label","Extruder Target: %1").arg(manager.getExtruderTargetTemperature)
+                anchors.bottom: somepic.bottom
                 }
 
                 Text {
-                    text: catalog.i18nc("@label","Bed Temperature: %1").arg(manager.getBedTemperature)
-                    // anchors.bottom: somepic.bottom
+                text: catalog.i18nc("@label","Bed Temperature: %1").arg(manager.getBedTemperature)
+                anchors.bottom: somepic.bottom
                 }
 
                 Text {
-                    text: catalog.i18nc("@label","Printer State: %1").arg(manager.getPrinterState)
-                    // anchors.bottom: somepic.bottom
+                text: catalog.i18nc("@label","Printer State: %1").arg(manager.getPrinterState)
+                anchors.bottom: somepic.bottom
                 }
             }
             UM.I18nCatalog{id: catalog; name:"cura"}
