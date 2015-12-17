@@ -21,7 +21,7 @@ UM.Dialog
     modality: Qt.NonModal
     id: d3dbase
 
-    title: catalog.i18nc("@title:window", "Print to Doodle3D WiFi-Box")
+    title: catalog.i18nc("@title:window", "Print to: %1").arg(manager.getBoxID)
 
     Column
     {
@@ -33,28 +33,20 @@ UM.Dialog
             spacing: UM.Theme.sizes.default_margin.width;
 
             Image {
-            id: somepic;
+            id: doodle3dlogo;
             source: "doodle3d.png"
             }
             Column{
                 Text {
-                text: catalog.i18nc("@label","Extruder Temperature: %1").arg(manager.getExtruderTemperature)
-                anchors.bottom: somepic.bottom
+                text: catalog.i18nc("@label","Extruder Temperature: %1/%2").arg(manager.getExtruderTemperature).arg(manager.getExtruderTargetTemperature)
                 }
 
                 Text {
-                text: catalog.i18nc("@label","Extruder Target: %1").arg(manager.getExtruderTargetTemperature)
-                anchors.bottom: somepic.bottom
-                }
-
-                Text {
-                text: catalog.i18nc("@label","Bed Temperature: %1").arg(manager.getBedTemperature)
-                anchors.bottom: somepic.bottom
+                text: catalog.i18nc("@label","Bed Temperature: %1/%2").arg(manager.getBedTemperature).arg(manager.getBedTargetTemperature)
                 }
 
                 Text {
                 text: catalog.i18nc("@label","Printer State: %1").arg(manager.getPrinterState)
-                anchors.bottom: somepic.bottom
                 }
             }
             UM.I18nCatalog{id: catalog; name:"cura"}
@@ -72,7 +64,8 @@ UM.Dialog
             Text
             {
                 //: USB Printing dialog label, %1 is printer state
-                text: catalog.i18nc("@label","%1%").arg(manager.getPrintPhase + "" + manager.getProgress)
+                text: catalog.i18nc("@label","%1").arg(manager.getPrintPhase)
+                // + "" + manager.getProgress + manager.addPercentOrNot
                 anchors.centerIn: parent
                 visible: manager.getProgress >0 ? true : false
             }
@@ -84,11 +77,13 @@ UM.Dialog
         {
             //: USB Printing dialog cancel print button
             text: catalog.i18nc("@action:button","Cancel");
+            enabled: manager.isPrinting == true ? true : false
             onClicked: { 
                 manager.cancelPrint();
+
                 //d3dbase.visible = true;
             }
-            // enabled: manager.progress == 0 ? false:  true
+            //enabled: manager.getProgress == 0 ? false:  true
         },
 
         Button
@@ -96,10 +91,11 @@ UM.Dialog
             id:printbutton;
             //: USB Printing dialog start print button
             text: catalog.i18nc("@action:button","Print");
+            enabled: manager.isPrinting == true ? false : true
             onClicked: { 
                 manager.startPrint()
             }
-            enabled: manager.getProgress == 0 ? true : false
+            //enabled: manager.getProgress == 0 ? false : true
         }
     ]
 }

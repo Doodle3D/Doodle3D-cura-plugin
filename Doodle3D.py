@@ -69,12 +69,13 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     def _updateThread(self):
         while self._check_updates:
             result = self.getSerialPortList()
+            Logger.log("d","RESULT RESULT: %s" % result)
             self._addRemovePorts(result)
             time.sleep(5)
 
     # Show firmware interface.
     # This will create the view if its not already created.
-    """
+    
     def spawnFirmwareInterface(self, serial_port):
         if self._firmware_view is None:
             path = QUrl.fromLocalFile(os.path.join(PluginRegistry.getInstance().getPluginPath("Doodle3D"), "SettingsWindow.qml"))
@@ -91,8 +92,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
                 self._printer_connections[printer_connection].updateFirmware(Resources.getPath(CuraApplication.ResourceTypes.Firmware, self._getDefaultFirmwareName()))
             except FileNotFoundError:
                 continue
-    """
-    """
+    
     @pyqtSlot(str, result=bool)
     def updateFirmwareBySerial(self, serial_port):
         if serial_port in self._printer_connections:
@@ -105,7 +105,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
                 return False
             return True
         return False
-    """
+    
     # Return the singleton instance of the USBPrinterManager
     @classmethod
     def getInstance(cls, engine=None, script_engine=None):
@@ -142,15 +142,15 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
 
     def _addRemovePorts(self, serial_ports):
         # First, find and add all new or changed keys
-        for serial_port in list(serial_ports):
-            if serial_port not in self._serial_port_list:
-                self.addConnectionSignal.emit(serial_port)
+        for boxIP, boxIDENT in serial_ports.items():
+            if boxIP not in self._serial_port_list:
+                self.addConnectionSignal.emit(boxIP,boxIDENT)
                 continue
-        self._serial_port_list = list(serial_ports)
+        self._serial_port_list = serial_ports
 
     # Because the model needs to be created in the same thread as the QMLEngine, we use a signal.
-    def addConnection(self, serial_port):
-        connection = PrinterConnection.PrinterConnection(serial_port)
+    def addConnection(self, serial_port, wifiboxid):
+        connection = PrinterConnection.PrinterConnection(serial_port, wifiboxid)
         connection.connect()
         connection.connectionStateChanged.connect(self._onPrinterConnectionStateChanged)
         self._printer_connections[serial_port] = connection
@@ -174,7 +174,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
 
     # Create a list of serial ports on the system.
     def getSerialPortList(self):
-        base_list = []
+        base_list = {}
 
         # Get response from api/list.php and retrieve local ip
         # from each individual boxes found on the local network
@@ -199,19 +199,19 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
                     pass
 
             else:  # Boxes that are alive will be formed together into the base_list
-                base_list.append(box['localip'])
+                base_list[box['localip']] = box['wifiboxid']
 
-        return list(base_list)
+        return base_list
 
     # Takes Domain and Path and returns decoded JSON response back
     def get(self, domain, path):
-        print('get: ', domain, path)
+        #print('get: ', domain, path)
         connect = http.client.HTTPConnection(domain)
         connect.request("GET", path)
         response = connect.getresponse()
-        print('  response: ', response.status, response.reason)
+        #print('  response: ', response.status, response.reason)
         jsonresponse = response.read()
-        print('  ', jsonresponse)
+        #print('  ', jsonresponse)
         return json.loads(jsonresponse.decode())
 
     _instance = None
