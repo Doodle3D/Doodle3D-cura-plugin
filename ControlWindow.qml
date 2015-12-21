@@ -38,15 +38,17 @@ UM.Dialog
             }
             Column{
                 Text {
-                text: catalog.i18nc("@label","Extruder Temperature: %1/%2").arg(manager.getExtruderTemperature).arg(manager.getExtruderTargetTemperature)
+                    text: catalog.i18nc("@label","Extruder Temperature: %1/%2").arg(manager.getExtruderTemperature).arg(manager.getExtruderTargetTemperature)
                 }
 
                 Text {
-                text: catalog.i18nc("@label","Bed Temperature: %1/%2").arg(manager.getBedTemperature).arg(manager.getBedTargetTemperature)
+                    text: (manager.getBedTemperature == 0 && manager.getBedTargetTemperature == 0) ? 
+                        catalog.i18nc("@label","") : 
+                        catalog.i18nc("@label","Bed Temperature: %1/%2").arg(manager.getBedTemperature).arg(manager.getBedTargetTemperature)
                 }
 
                 Text {
-                text: catalog.i18nc("@label","Printer State: %1").arg(manager.getPrinterState)
+                    text: catalog.i18nc("@label","Printer State: %1").arg(manager.getPrinterState)
                 }
             }
             UM.I18nCatalog{id: catalog; name:"cura"}
@@ -67,7 +69,7 @@ UM.Dialog
                 text: catalog.i18nc("@label","%1").arg(manager.getPrintPhase)
                 // + "" + manager.getProgress + manager.addPercentOrNot
                 anchors.centerIn: parent
-                visible: manager.getProgress >0 ? true : false
+                // visible: manager.getProgress >0 ? true : false
             }
         }
     }
@@ -77,7 +79,7 @@ UM.Dialog
         {
             //: USB Printing dialog cancel print button
             text: catalog.i18nc("@action:button","Cancel");
-            enabled: manager.isPrinting == true ? true : false
+            enabled: manager.isPrinting ? true : false
             onClicked: { 
                 manager.cancelPrint();
 
@@ -91,7 +93,7 @@ UM.Dialog
             id:printbutton;
             //: USB Printing dialog start print button
             text: catalog.i18nc("@action:button","Print");
-            enabled: manager.isPrinting == true ? false : true
+            enabled: manager.isPrinting? false : true
             onClicked: { 
                 manager.startPrint()
             }
