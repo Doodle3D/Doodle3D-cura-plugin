@@ -141,6 +141,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     # This function runs when you press the "cancel" button in the control interface
     @pyqtSlot()
     def cancelPrint(self):
+        self._is_printing = False
+        self.isPrintingChanged.emit()
         self._is_cancelling = True
         Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","UltiGCode")
         self.httppost(self._box_IP, "/d3dapi/printer/stop", {'gcode': 'M104 S0\nG28'})  # Cancels the current print by HTTP POSTing the stop gcode.
@@ -164,6 +166,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             Logger.log("d", "startPrint wordt uitgevoerd")
             self.flagevent.set()
             if self._is_printing is False:
+                self._is_printing = True
+                self.isPrintingChanged.emit()
                 self._printing_thread.start()
             
     # Starts the print
@@ -182,7 +186,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         for i in range(len(self.decodedList)):
             self.tempBlock.append(self.decodedList[i])
 
-            if sys.getsizeof(self.tempBlock) > 7000:
+            if sys.getsizeof(self.tempBlock) > 6000:
                 blocks.append(self.tempBlock)
                 Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
                 self.tempBlock = []
@@ -206,7 +210,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                         successful = True  # Set the variable to True
                         currentblock += 1  # Go to the next block in the array
                         Logger.log("d", "Successfully sent block %s from %s" % (currentblock, total))
-                        time.sleep(5)  # Wait 5 seconds before sending the next block to not overload the API
+                        time.sleep(15)  # Wait 5 seconds before sending the next block to not overload the API
 
                 except:
                     time.sleep(15)  # Send the failed block again after 15 seconds
@@ -317,7 +321,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             try:
                 # self.printerInfo['data']['hotend']  # First checks if we can get info from the printer by looking at the availability of hotend/extruder temperature
                 self._extTemperature = self.printerInfo['data']['hotend']  # Get Extruder Temperature 
-                self._extTargetTemperature = self.printerInfo['data']['hotend_target']  # Get Extruder Target Temperature          
+                self._extTargetTemperature = self.printerInfo['data']['hotend_target']  # Get Extruder Target Temperature
                 self._printerState = self.printerInfo['data']['state']  # Get the state of the printer
                 self._bedTemperature = self.printerInfo['data']['bed'] # Get bed temperature
                 self._bedTargetTemperature = self.printerInfo['data']['bed_target'] # Get bed target temperature
@@ -339,20 +343,31 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 self.isPrintingChanged.emit()
                 if self._extTargetTemperature >= 1 and (self._extTemperature/self._extTargetTemperature)*100 < 100 and self._heatedUp is False:
                     self.setProgress((self._extTemperature / self._extTargetTemperature) * 100, 100)
-                    self._printPhase = "Heating up... {}%".format(self.getProgress)
+                    self._printPhase = "Heating up... {0:.1f}%".format(self.getProgress)
                     self.printPhaseChanged.emit()
 
                 elif (self._currentLine / self._apitotalLines) * 100 < 100:
                     self._heatedUp = True
                     self.setProgress((self._currentLine / self._apitotalLines) * 100, 100)
-                    self._printPhase = "Printing... {}%".format(self.getProgress)
+                    self._printPhase = "Printing... {0:.1f}%".format(self.getProgress)
                     self.printPhaseChanged.emit()
-            elif self.printerInfo['data']['state'] == "idle" and self._progress > 0:
+                    
+            elif self.printerInfo['data']['state'] == "idle":
                 self.setProgress(0, 100)
                 self._heatedUp = False
-                self._printPhase = "Print Completed "
+                if self._progress > 0:
+                    self._printPhase = "Print Completed"
+                elif self._progress == 0:
+                    self._printPhase = "Ready to print"
                 self.printPhaseChanged.emit()
                 self._is_printing = False
+                self.isPrintingChanged.emit()
+
+            elif self.printerInfo['data']['state'] == "stopping":
+                self.setProgress(0,100)
+                self._printPhase = "Stopping the print, it might take some time"
+                self._is_printing = False
+                self.printPhaseChanged.emit()
                 self.isPrintingChanged.emit()
             else:
                 self._printPhase = ""
