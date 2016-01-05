@@ -152,14 +152,18 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     # This function runs when you press the "print" button in the control interface
     @pyqtSlot()
     def startPrint(self):
+        self._is_printing = True
+        self.isPrintingChanged.emit()
         Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","RepRap")
         
-        self._printing_thread = threading.Thread(target=self.printGCode)  # The function that gets threaded
-        self._printing_thread.daemon = True     # Daemon threads are automatically killed upon cura quit
-
         self.flagevent.clear()
         Application.getInstance().getBackend().processingProgress.connect(self.onProcessingProgress)
         Application.getInstance().getBackend().forceSlice()
+
+        self._printing_thread = threading.Thread(target=self.printGCode)  # The function that gets threaded
+        self._printing_thread.daemon = True     # Daemon threads are automatically killed upon cura quit
+
+
 
     def onProcessingProgress(self, slicedprint):
         if self.flagevent.is_set() == False and slicedprint == True and self.printerInfo['data']['state'] == "idle":
@@ -176,7 +180,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self.isPrintingChanged.emit()
         self._is_cancelling = False
         self._gcode_list = getattr(Application.getInstance().getController().getScene(), "gcode_list")
-        Logger.log("d","gcode_list is: %s" % self._gcode_list)
+        # Logger.log("d","gcode_list is: %s" % self._gcode_list)
         self.joinedString = "".join(self._gcode_list)
         self.decodedList = []
         self.decodedList = self.joinedString.split('\n')
@@ -186,7 +190,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         for i in range(len(self.decodedList)):
             self.tempBlock.append(self.decodedList[i])
 
-            if sys.getsizeof(self.tempBlock) > 6000:
+            if sys.getsizeof(self.tempBlock) > 7000:
                 blocks.append(self.tempBlock)
                 Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
                 self.tempBlock = []
@@ -194,27 +198,30 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         blocks.append(self.tempBlock)
         self.tempBlock = []
         self._totalLines = self.joinedString.count('\n') - self.joinedString.count('\n;') - len(blocks)
-        currentblock = 0
-        total = len(blocks)
+        self.currentblock = 0
+        self.total = len(blocks)
 
         for j in range(len(blocks)):
-            if self._is_cancelling is True:
-                self._is_cancelling = False
-                break
-                
             successful = False     # The sent status of the current gcode block 
-            while not successful:  
-                try:
-                    Response = self.sendGCode('\n'.join(blocks[j]), j)  # Send next block
-                    if Response['status'] == "success":  # If the block is successfully sent
-                        successful = True  # Set the variable to True
-                        currentblock += 1  # Go to the next block in the array
-                        Logger.log("d", "Successfully sent block %s from %s" % (currentblock, total))
-                        time.sleep(15)  # Wait 5 seconds before sending the next block to not overload the API
+            while not successful: 
+                if self._is_cancelling is True:
+                    self._is_cancelling = False
+                    self.currentblock = 0
+                    Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","UltiGCode")
+                    return
+                if self.printerInfo['data']['buffered_lines'] <= 35000:
+                    try:
+                        Response = self.sendGCode('\n'.join(blocks[j]), j)  # Send next block
+                        if Response['status'] == "success":  # If the block is successfully sent
+                            successful = True  # Set the variable to True
+                            self.currentblock += 1  # Go to the next block in the array
+                            Logger.log("d", "Successfully sent block %s from %s" % (self.currentblock, self.total))
+                            # time.sleep(1)  # Wait 5 seconds before sending the next block to not overload the API
 
-                except:
-                    time.sleep(15)  # Send the failed block again after 15 seconds
-        currentblock = 0
+                    except:
+                        Logger.log("d","Failed block, sending again in 15 seconds")
+                        time.sleep(1)  # Send the failed block again after 15 seconds
+
         Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","UltiGCode")
 
     # Get the serial port string of this connection.
@@ -325,7 +332,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 self._printerState = self.printerInfo['data']['state']  # Get the state of the printer
                 self._bedTemperature = self.printerInfo['data']['bed'] # Get bed temperature
                 self._bedTargetTemperature = self.printerInfo['data']['bed_target'] # Get bed target temperature
-                
                 self.extruderTemperatureChanged.emit()
                 self.extruderTargetChanged.emit() 
                 self.printerStateChanged.emit()
@@ -338,7 +344,12 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
             if self.printerInfo['data']['state'] == "printing":
                 self._currentLine = self.printerInfo['data']['current_line']
-                self._apitotalLines = self.printerInfo['data']['total_lines']
+
+                if self.currentblock == self.total:
+                    self._apitotalLines = self.printerInfo['data']['total_lines']
+                else:
+                    self._apitotalLines = self._totalLines
+
                 self._is_printing = True
                 self.isPrintingChanged.emit()
                 if self._extTargetTemperature >= 1 and (self._extTemperature/self._extTargetTemperature)*100 < 100 and self._heatedUp is False:
@@ -350,8 +361,11 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                     self._heatedUp = True
                     self.setProgress((self._currentLine / self._apitotalLines) * 100, 100)
                     self._printPhase = "Printing... {0:.1f}%".format(self.getProgress)
+
                     self.printPhaseChanged.emit()
-                    
+            elif self.printerInfo['data']['state'] == "buffering":
+                self._is_printing = True
+
             elif self.printerInfo['data']['state'] == "idle":
                 self.setProgress(0, 100)
                 self._heatedUp = False
@@ -359,22 +373,19 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                     self._printPhase = "Print Completed"
                 elif self._progress == 0:
                     self._printPhase = "Ready to print"
-                self.printPhaseChanged.emit()
-                self._is_printing = False
-                self.isPrintingChanged.emit()
+                    self._is_printing = False
+
 
             elif self.printerInfo['data']['state'] == "stopping":
                 self.setProgress(0,100)
-                self._printPhase = "Stopping the print, it might take some time"
                 self._is_printing = False
-                self.printPhaseChanged.emit()
-                self.isPrintingChanged.emit()
+                self._printPhase = "Stopping the print, it might take some time"
             else:
                 self._printPhase = ""
                 self._heatedUp = False
-                self._is_printing = False
-                self.isPrintingChanged.emit()
-                self.printPhaseChanged.emit()             
+                self._is_printing = False  
+            self.printPhaseChanged.emit()
+            self.isPrintingChanged.emit()         
             time.sleep(1)
 
     # HTTP GET request to the Doodle3D Wi-Fi box
@@ -395,4 +406,5 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         connect.request("POST", path, params, headers)
         response = connect.getresponse()
         jsonresponse = response.read()
+        Logger.log("d","Response is: %s" % jsonresponse)
         return json.loads(jsonresponse.decode())

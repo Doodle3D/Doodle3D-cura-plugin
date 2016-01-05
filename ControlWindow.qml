@@ -19,8 +19,9 @@ UM.Dialog
     maximumWidth: 400;
     maximumHeight:143;
     modality: Qt.NonModal
+    // flags: Qt.Raise
     id: d3dbase
-
+    // d3dbase.raise();
     title: catalog.i18nc("@title:window", "Print to: %1").arg(manager.getBoxID)
 
     Column
@@ -79,9 +80,9 @@ UM.Dialog
         {
             //: USB Printing dialog cancel print button
             text: catalog.i18nc("@action:button","Cancel");
-            enabled: manager.isPrinting ? true : false
+            enabled: (manager.isPrinting || !manager.getPrintPhase=="Box not connected to a printer ") ? true : false
             onClicked: { 
-                manager.cancelPrint();
+                manager.cancelPrint()
 
                 //d3dbase.visible = true;
             }
@@ -90,10 +91,12 @@ UM.Dialog
 
         Button
         {
-            id:printbutton;
+            id: printbutton;
             //: USB Printing dialog start print button
             text: catalog.i18nc("@action:button","Print");
-            enabled: manager.isPrinting? false : true
+            //enabled: manager.isPrinting? false : true
+            //enabled: (manager.getPrinterState=="printing" || manager.getPrinterState=="stopping" || manager.getPrinterState=="buffering" || manager.getPrintPhase=="Box not connected to a printer ") ? false : true
+            enabled: manager.isPrinting?false:true
             onClicked: { 
                 manager.startPrint()
             }
