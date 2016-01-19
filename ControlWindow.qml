@@ -48,9 +48,9 @@ UM.Dialog
                         catalog.i18nc("@label","Bed Temperature: %1/%2").arg(manager.getBedTemperature).arg(manager.getBedTargetTemperature)
                 }
 
-                Text {
-                    text: catalog.i18nc("@label","Printer State: %1").arg(manager.getPrinterState)
-                }
+                //Text {
+                    //text: catalog.i18nc("@label","Printer State: %1").arg(manager.getPrinterState)
+                //}
             }
             UM.I18nCatalog{id: catalog; name:"cura"}
 

@@ -57,6 +57,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._bedTargetTemperature = 0     # Target Temperature of the bed
 
         self._currentLine = 0         # Current line (in the gcode_list) in printing
+        self.currentblock = 0
+        self.total = 0         
         self._totalLines = 0          # Total lines that's gonna be printed
         self._progress = 0            # Progress of the print
         self._printPhase = ""         # 3 printer phases: "Heating up... ", "Printing... " and "Print Completed "
@@ -351,8 +353,10 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
                 self.printerInfo = self.printerInfo['data']
             except:
-                self._printPhase = "Lost connection"
+                self._printPhase = "Lost connection with Wi-Fi box"
+                self._printerState = "disconnected"
                 self.printPhaseChanged.emit()
+                self.printerStateChanged.emit()
                 self._extTemperature = 0
                 self._bedTemperature = 0
                 self.extruderTemperatureChanged.emit()
