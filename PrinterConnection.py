@@ -226,12 +226,11 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                             successful = True  # Set the variable to True
                             self.currentblock += 1  # Go to the next block in the array
                             Logger.log("d", "Successfully sent block %s from %s" % (self.currentblock, self.total))
-                            time.sleep(2)  # Wait 5 seconds before sending the next block to not overload the API
-
                     except:
                         Logger.log("d","Failed block, sending again in 15 seconds")
                         time.sleep(15)  # Send the failed block again after 15 seconds
-                time.sleep(3)
+                else:
+                    time.sleep(3)
         self.setGCodeFlavor("UltiGCode")
 
     # Get the serial port string of this connection.
@@ -449,7 +448,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def httppost(self, domain, path, data):
         params = urllib.parse.urlencode(data)
         headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}
-        connect = http.client.HTTPConnection(domain, 80, timeout=30)
+        connect = http.client.HTTPConnection(domain, 80, timeout=5)
         connect.request("POST", path, params, headers)
         response = connect.getresponse()
         jsonresponse = response.read()
