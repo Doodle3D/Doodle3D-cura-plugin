@@ -10,17 +10,17 @@ import UM 1.1 as UM
 
 UM.Dialog
 {
+    id: d3dbase
     width: 400;
     height: 143;
-
     minimumWidth: 400;
     minimumHeight: 143;
 
     maximumWidth: 400;
     maximumHeight:143;
-    modality: Qt.NonModal
+    modality: Qt.ApplicationModal
     // flags: Qt.Raise
-    id: d3dbase
+    
     // d3dbase.raise();
     title: catalog.i18nc("@title:window", "Print to: %1").arg(manager.getBoxID)
 
@@ -80,9 +80,22 @@ UM.Dialog
         {
             //: USB Printing dialog cancel print button
             text: catalog.i18nc("@action:button","Cancel");
-            enabled: (manager.isPrinting || !manager.getPrintPhase=="Box not connected to a printer ") ? true : false
+            enabled: manager.getPrinterState=="printing" || manager.getPrinterState=="buffering"
             onClicked: { 
                 manager.cancelPrint()
+
+                //d3dbase.visible = true;
+            }
+            //enabled: manager.getProgress == 0 ? false:  true
+        },
+
+        Button
+        {
+            //: USB Printing dialog cancel print button
+            text: "Test";
+            enabled: true
+            onClicked: { 
+                manager.testButton()
 
                 //d3dbase.visible = true;
             }
@@ -95,8 +108,7 @@ UM.Dialog
             //: USB Printing dialog start print button
             text: catalog.i18nc("@action:button","Print");
             //enabled: manager.isPrinting? false : true
-            //enabled: (manager.getPrinterState=="printing" || manager.getPrinterState=="stopping" || manager.getPrinterState=="buffering" || manager.getPrintPhase=="Box not connected to a printer ") ? false : true
-            enabled: manager.isPrinting?false:true
+            enabled: manager.getPrinterState=="idle"
             onClicked: { 
                 manager.startPrint()
             }

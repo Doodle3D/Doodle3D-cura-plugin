@@ -36,6 +36,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self.setDescription(catalog.i18nc("@info:tooltip", "Print with "+ box_ID))
         self.setIconName("print")
         self._control_view = None     # The print interface window, it gets created later
+        self.printButton = True
         #######################################################################
 
         ### Printer ###
@@ -59,7 +60,10 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._totalLines = 0          # Total lines that's gonna be printed
         self._progress = 0            # Progress of the print
         self._printPhase = ""         # 3 printer phases: "Heating up... ", "Printing... " and "Print Completed "
-        self._printerState = ""       
+        self._printerState = ""
+
+        self._stateLocked = False       
+
         self._gcode_list = []         # Cura-generated GCode
         #######################################################################
 
@@ -86,6 +90,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     printPhaseChanged = pyqtSignal()            # Printing phases ("Heating up... ", "Printing... " and "Print Completed ")
     isPrintingChanged = pyqtSignal()
     boxIDChanged = pyqtSignal()
+    printButtonSignal = pyqtSignal()
 
     @pyqtProperty(str, notify = boxIDChanged)
     def getBoxID(self):
@@ -119,11 +124,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def getPrintPhase(self):
         return self._printPhase
 
-    # Is the printer actively printing
-    @pyqtProperty(bool, notify=isPrintingChanged)
-    def isPrinting(self):
-        return self._is_printing
-
     def sendGCode(self, gcode, index):
         if index == 0:
             first = 'true'
@@ -140,47 +140,55 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     
     # This function runs when you press the "cancel" button in the control interface
     @pyqtSlot()
+    def testButton(self):
+        #Application.getInstance().getBackend().processingProgress.connect(self.onProcessingProgress)
+        #Application.getInstance().getBackend().printDurationMessage.connect(self.onPrintDurationMessage)
+        self.setGCodeFlavor("UltiGCode")
+        #Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","RepRap")
+        self.forceSlice()
+        self._gcode_list = getattr(Application.getInstance().getController().getScene(), "gcode_list")
+        Logger.log("d","GCODE IS:%s" % self._gcode_list)
+
+    @pyqtSlot()
     def cancelPrint(self):
+        self.overrideState("stopping")
         self._is_printing = False
-        self.isPrintingChanged.emit()
         self._is_cancelling = True
-        Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","UltiGCode")
+        self.setGCodeFlavor("UltiGCode")
         self.httppost(self._box_IP, "/d3dapi/printer/stop", {'gcode': 'M104 S0\nG28'})  # Cancels the current print by HTTP POSTing the stop gcode.
         self.setProgress(0, 100)  # Resets the progress to 0.
-        Application.getInstance().getBackend().forceSlice()
+        self.forceSlice()
 
-    # This function runs when you press the "print" button in the control interface
+    # This function runs when you press the "print" button in the plugin window
     @pyqtSlot()
     def startPrint(self):
+        self.overrideState("printing")
         self._is_printing = True
-        self.isPrintingChanged.emit()
-        Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","RepRap")
-        
-        self.flagevent.clear()
-        Application.getInstance().getBackend().processingProgress.connect(self.onProcessingProgress)
-        Application.getInstance().getBackend().forceSlice()
+        Application.getInstance().getBackend().printDurationMessage.connect(self.onFinishedSlicing)
+        self._printing_thread = threading.Thread(target=self.printGCode)
+        self._printing_thread.daemon = True
+        self.setGCodeFlavor("RepRap")
+        self.forceSlice()
 
-        self._printing_thread = threading.Thread(target=self.printGCode)  # The function that gets threaded
-        self._printing_thread.daemon = True     # Daemon threads are automatically killed upon cura quit
+    def onFinishedSlicing(self, time, amount):
+        Logger.log("d","Finished slicing")
+        self.time = time
+        self.amount = amount
+        if self._is_printing == True:
+            self._is_printing = False
+            self._printing_thread.start()
+            Application.getInstance().getBackend().printDurationMessage.disconnect(self.onFinishedSlicing)
 
-
-
-    def onProcessingProgress(self, slicedprint):
-        if self.flagevent.is_set() == False and slicedprint == True and self.printerInfo['data']['state'] == "idle":
-            Logger.log("d", "startPrint wordt uitgevoerd")
-            self.flagevent.set()
-            if self._is_printing is False:
-                self._is_printing = True
-                self.isPrintingChanged.emit()
-                self._printing_thread.start()
-            
     # Starts the print
     def printGCode(self):
         self._is_printing = True
-        self.isPrintingChanged.emit()
+        # self.isPrintingChanged.emit()
         self._is_cancelling = False
         self._gcode_list = getattr(Application.getInstance().getController().getScene(), "gcode_list")
-        # Logger.log("d","gcode_list is: %s" % self._gcode_list)
+        Logger.log("d","GCODE IS:%s" % self._gcode_list)
+        #with open("bimbambom.txt", "w") as text_file:
+        #    print("GCode: {}".format(self._gcode_list), file=text_file)
+
         self.joinedString = "".join(self._gcode_list)
         self.decodedList = []
         self.decodedList = self.joinedString.split('\n')
@@ -200,18 +208,18 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._totalLines = self.joinedString.count('\n') - self.joinedString.count('\n;') - len(blocks)
         self.currentblock = 0
         self.total = len(blocks)
-
         for j in range(len(blocks)):
             successful = False     # The sent status of the current gcode block 
             while not successful: 
                 if self._is_cancelling is True:
                     self._is_cancelling = False
                     self.currentblock = 0
-                    Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","UltiGCode")
+                    self.setGCodeFlavor("UltiGCode")
                     return
-                if self.printerInfo['data']['buffered_lines'] <= 35000:
+                if self.printerInfo['buffered_lines'] <= 150000:
                     try:
                         Response = self.sendGCode('\n'.join(blocks[j]), j)  # Send next block
+                        self.releaseStateLock()
                         if Response['status'] == "success":  # If the block is successfully sent
                             successful = True  # Set the variable to True
                             self.currentblock += 1  # Go to the next block in the array
@@ -221,8 +229,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                     except:
                         Logger.log("d","Failed block, sending again in 15 seconds")
                         time.sleep(1)  # Send the failed block again after 15 seconds
-
-        Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","UltiGCode")
+        #Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","UltiGCode")
 
     # Get the serial port string of this connection.
     # \return serial port
@@ -313,92 +320,127 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._progress = (progress / max_progress) * 100
         self.progressChanged.emit()
 
+    def releaseStateLock(self):
+        self._stateLocked = False
+
+    def overrideState(self, value):
+        self.setState(value)
+        self._stateLocked = True
+
+    def setState(self, value):
+        if self._stateLocked is False:
+            self._printerState = value
+            self.printerStateChanged.emit()
+
+    def setGCodeFlavor(self,flavor):
+        Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor",flavor)
+        return
+
+    def forceSlice(self):
+        Application.getInstance().getBackend().forceSlice()
+        return
+
     def getPrinterInfo(self):
+        ## #1 First check if the box is on
+        #  #2 Check if the box is connected to the printer
+        #  #3 Gather all data from printer (Temperatures, Temperature Targets, Printer State etc.)
+        #  #4 Check state and act accordingly
         while True:
-            try:
+            try: #1
                 self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
-                if self.printerInfo['data']['state'] == "disconnected":
-                    Logger.log("d","This box is not connected to the printer: %s" % self._box_ID)
-                    self._printPhase = "Box not connected to a printer "
-                    self.printPhaseChanged.emit()
+                self.printerInfo = self.printerInfo['data']
             except:
+                self._printPhase = "Lost connection"
+                self.printPhaseChanged.emit()
+                self._extTemperature = 0
+                self._bedTemperature = 0
+                self.extruderTemperatureChanged.emit()
+                self.bedTemperatureChanged.emit()
+                self.setProgress(0,100)
                 time.sleep(3)
                 continue
 
-            try:
-                # self.printerInfo['data']['hotend']  # First checks if we can get info from the printer by looking at the availability of hotend/extruder temperature
-                self._extTemperature = self.printerInfo['data']['hotend']  # Get Extruder Temperature 
-                self._extTargetTemperature = self.printerInfo['data']['hotend_target']  # Get Extruder Target Temperature
-                self._printerState = self.printerInfo['data']['state']  # Get the state of the printer
-                self._bedTemperature = self.printerInfo['data']['bed'] # Get bed temperature
-                self._bedTargetTemperature = self.printerInfo['data']['bed_target'] # Get bed target temperature
+            if self._printerState == "disconnected": #2
+                Logger.log("d","This box is not connected to the printer: %s" % self._box_ID)
+                self._printPhase = "Box not connected to a printer "
+                self.printPhaseChanged.emit()
+
+            try: #3
+                self._extTemperature = self.printerInfo['hotend']  # Get Extruder Temperature 
+                self._extTargetTemperature = self.printerInfo['hotend_target']  # Get Extruder Target Temperature
+                self._APIState = self.printerInfo['state']
+                self.setState(self.printerInfo['state'])
+                self._bedTemperature = self.printerInfo['bed'] # Get bed temperature
+                self._bedTargetTemperature = self.printerInfo['bed_target'] # Get bed target temperature
+
+                if (self._APIState == self._printerState):
+                    self.releaseStateLock()
+
                 self.extruderTemperatureChanged.emit()
                 self.extruderTargetChanged.emit() 
                 self.printerStateChanged.emit()
                 self.bedTemperatureChanged.emit()
                 self.bedTargetTemperatureChanged.emit()
+
             except KeyError:
-                # Logger.log("d","voert deze uit voor: %s" % self.printerInfo)
                 time.sleep(3)
                 continue
 
-            if self.printerInfo['data']['state'] == "printing":
-                self._currentLine = self.printerInfo['data']['current_line']
+            if self.printerInfo['state'] == "printing": #4
+                self._currentLine = self.printerInfo['current_line']
 
                 if self.currentblock == self.total:
-                    self._apitotalLines = self.printerInfo['data']['total_lines']
+                    self._apitotalLines = self.printerInfo['total_lines']
                 else:
                     self._apitotalLines = self._totalLines
 
-                self._is_printing = True
-                self.isPrintingChanged.emit()
                 if self._extTargetTemperature >= 1 and (self._extTemperature/self._extTargetTemperature)*100 < 100 and self._heatedUp is False:
                     self.setProgress((self._extTemperature / self._extTargetTemperature) * 100, 100)
                     self._printPhase = "Heating up... {0:.1f}%".format(self.getProgress)
                     self.printPhaseChanged.emit()
 
-                elif (self._currentLine / self._apitotalLines) * 100 < 100:
+                elif (self._currentLine / self._apitotalLines) * 100 < 100 and self._currentLine > 2:
                     self._heatedUp = True
                     self.setProgress((self._currentLine / self._apitotalLines) * 100, 100)
                     self._printPhase = "Printing... {0:.1f}%".format(self.getProgress)
-
                     self.printPhaseChanged.emit()
-            elif self.printerInfo['data']['state'] == "buffering":
-                self._is_printing = True
+                else:
+                    self._printPhase = "Getting ready to print..."
+                    self.printPhaseChanged.emit()
 
-            elif self.printerInfo['data']['state'] == "idle":
-                self.setProgress(0, 100)
+            elif self._printerState == "idle":
                 self._heatedUp = False
+                self.flagevent.clear()
                 if self._progress > 0:
+                    self.setProgress(0, 100)
                     self._printPhase = "Print Completed"
                 elif self._progress == 0:
-                    self._printPhase = "Ready to print"
                     self._is_printing = False
-
-
-            elif self.printerInfo['data']['state'] == "stopping":
+                    self._printPhase = "Ready to print"
+                    
+            elif self._printerState == "stopping":
                 self.setProgress(0,100)
                 self._is_printing = False
                 self._printPhase = "Stopping the print, it might take some time"
             else:
                 self._printPhase = ""
-                self._heatedUp = False
-                self._is_printing = False  
+                self._heatedUp = False 
+
             self.printPhaseChanged.emit()
             self.isPrintingChanged.emit()         
-            time.sleep(1)
+            time.sleep(2)
 
     # HTTP GET request to the Doodle3D Wi-Fi box
-    # Domain is usually the Doodle3D Wi-Fi box IP, path is usually "d3dapi/info/status"
+    # Domain could be the Doodle3D Wi-Fi box IP, path is usually "d3dapi/info/status"
     def httpget(self, domain, path):
-        connect = http.client.HTTPConnection(domain)
+        connect = http.client.HTTPConnection(domain,80,timeout=5)
         connect.request("GET", path)
         response = connect.getresponse()
         jsonresponse = response.read()
         return json.loads(jsonresponse.decode())
 
     # HTTP POST request to the Doodle3D Wi-Fi box
-    # Domain is usually the Doodle3D Wi-Fi box IP, path is usually "d3dapi/info/status"
+    # Domain could be the Doodle3D Wi-Fi box IP, path is usually "d3dapi/info/status"
     def httppost(self, domain, path, data):
         params = urllib.parse.urlencode(data)
         headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}

@@ -69,7 +69,7 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     def _updateThread(self):
         while self._check_updates:
             result = self.getSerialPortList()
-            Logger.log("d","RESULT RESULT: %s" % result)
+            Logger.log("d","Connected Boxes: %s" % result)
             self._addRemovePorts(result)
             time.sleep(5)
 
