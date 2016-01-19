@@ -224,12 +224,13 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                             successful = True  # Set the variable to True
                             self.currentblock += 1  # Go to the next block in the array
                             Logger.log("d", "Successfully sent block %s from %s" % (self.currentblock, self.total))
-                            # time.sleep(1)  # Wait 5 seconds before sending the next block to not overload the API
+                            time.sleep(2)  # Wait 5 seconds before sending the next block to not overload the API
 
                     except:
                         Logger.log("d","Failed block, sending again in 15 seconds")
-                        time.sleep(1)  # Send the failed block again after 15 seconds
-        #Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","UltiGCode")
+                        time.sleep(15)  # Send the failed block again after 15 seconds
+                time.sleep(3)
+        self.setGCodeFlavor("UltiGCode")
 
     # Get the serial port string of this connection.
     # \return serial port
