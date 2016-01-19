@@ -145,11 +145,19 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     def testButton(self):
         #Application.getInstance().getBackend().processingProgress.connect(self.onProcessingProgress)
         #Application.getInstance().getBackend().printDurationMessage.connect(self.onPrintDurationMessage)
+
+        self.setGCodeFlavor("RepRap")
+        print(self.getGCodeFlavor())
+
         self.setGCodeFlavor("UltiGCode")
-        #Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor","RepRap")
+        print(self.getGCodeFlavor())
+
+        self.setGCodeFlavor("RepRap")
+        print(self.getGCodeFlavor())
+
         self.forceSlice()
-        self._gcode_list = getattr(Application.getInstance().getController().getScene(), "gcode_list")
-        Logger.log("d","GCODE IS:%s" % self._gcode_list)
+        #self._gcode_list = getattr(Application.getInstance().getController().getScene(), "gcode_list")
+        #Logger.log("d","GCODE IS:%s" % self._gcode_list)
 
     @pyqtSlot()
     def cancelPrint(self):
@@ -338,6 +346,10 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor",flavor)
         return
 
+    def getGCodeFlavor(self):
+        flavor = Application.getInstance().getMachineManager().getActiveMachineInstance().getMachineSettingValue("machine_gcode_flavor")
+        return flavor
+
     def forceSlice(self):
         Application.getInstance().getBackend().forceSlice()
         return
@@ -353,7 +365,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 self.printerInfo = self.printerInfo['data']
             except:
                 self._printPhase = "Lost connection with Wi-Fi box"
-                self._printerState = "disconnected"
+                self._printerState = "lost"
                 self.printPhaseChanged.emit()
                 self.printerStateChanged.emit()
                 self._extTemperature = 0
