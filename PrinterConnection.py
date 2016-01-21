@@ -30,6 +30,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         OutputDevice.__init__(self, box_IP)
         SignalEmitter.__init__(self)
 
+        self.originalFlavor = self.getGCodeFlavor()
+        Application.getInstance().applicationShuttingDown.connect(self.onShutDown)
         ### Interface related ###
         self.setName(catalog.i18nc("@item:inmenu", "Doodle3D printing"))
         self.setShortDescription(catalog.i18nc("@action:button", "Print with Doodle3D"))
@@ -146,11 +148,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         #Application.getInstance().getBackend().processingProgress.connect(self.onProcessingProgress)
         #Application.getInstance().getBackend().printDurationMessage.connect(self.onPrintDurationMessage)
 
-        self.setGCodeFlavor("RepRap")
-        print(self.getGCodeFlavor())
-
-        self.setGCodeFlavor("UltiGCode")
-        print(self.getGCodeFlavor())
 
         self.setGCodeFlavor("RepRap")
         print(self.getGCodeFlavor())
@@ -164,7 +161,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self.overrideState("stopping")
         self._is_printing = False
         self._is_cancelling = True
-        self.setGCodeFlavor("UltiGCode")
+        if self.originalFlavor != None:
+            self.setGCodeFlavor(self.originalFlavor)
         self.httppost(self._box_IP, "/d3dapi/printer/stop", {'gcode': 'M104 S0\nG28'})  # Cancels the current print by HTTP POSTing the stop gcode.
         self.setProgress(0, 100)  # Resets the progress to 0.
         self.forceSlice()
@@ -177,7 +175,9 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         Application.getInstance().getBackend().printDurationMessage.connect(self.onFinishedSlicing)
         self._printing_thread = threading.Thread(target=self.printGCode)
         self._printing_thread.daemon = True
-        self.setGCodeFlavor("RepRap")
+        if (self.getGCodeFlavor != "RepRap" or "RepRap (Marlin/Sprinter)"):
+            self.originalFlavor = self.getGCodeFlavor()
+            self.setGCodeFlavor("RepRap")
         self.forceSlice()
 
     def onFinishedSlicing(self, time, amount):
@@ -187,7 +187,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         if self._is_printing == True:
             self._is_printing = False
             self._printing_thread.start()
-            Application.getInstance().getBackend().printDurationMessage.disconnect(self.onFinishedSlicing)
+            #Application.getInstance().getBackend().printDurationMessage.disconnect(self.onFinishedSlicing)
 
     # Starts the print
     def printGCode(self):
@@ -224,7 +224,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 if self._is_cancelling is True:
                     self._is_cancelling = False
                     self.currentblock = 0
-                    self.setGCodeFlavor("UltiGCode")
+                    if (self.originalFlavor != None):
+                        self.setGCodeFlavor(self.originalFlavor)
                     return
                 if self.printerInfo['buffered_lines'] <= 150000:
                     try:
@@ -239,7 +240,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                         time.sleep(15)  # Send the failed block again after 15 seconds
                 else:
                     time.sleep(3)
-        self.setGCodeFlavor("UltiGCode")
+        self.setGCodeFlavor(self.originalFlavor)
 
     # Get the serial port string of this connection.
     # \return serial port
@@ -360,6 +361,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         #  #3 Gather all data from printer (Temperatures, Temperature Targets, Printer State etc.)
         #  #4 Check state and act accordingly
         while True:
+            print("Flavor is: "+self.getGCodeFlavor())
             try: #1
                 self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
                 self.printerInfo = self.printerInfo['data']
@@ -466,3 +468,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         jsonresponse = response.read()
         Logger.log("d","Response is: %s" % jsonresponse)
         return json.loads(jsonresponse.decode())
+    def onShutDown(self):
+        if self.originalFlavor != None:
+            self.setGCodeFlavor(self.originalFlavor)       
+            Application.getInstance().getMachineManager().saveAll()
