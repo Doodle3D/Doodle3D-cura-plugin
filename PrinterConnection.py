@@ -42,7 +42,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         #######################################################################
 
         ### Printer ###
-        self._box_IP = box_IP         # IP address of this Doodle3D Wi-Fi box
+        self._box_IP = box_IP         # IP address of this Doodle3D WiFi box
         self._box_ID = box_ID
         self._is_connecting = False   # Printer is connecting
         self._is_connected = False    # Printer is connected
@@ -366,7 +366,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
                 self.printerInfo = self.printerInfo['data']
             except:
-                self._printPhase = "Lost connection with Wi-Fi box"
+                self._printPhase = "Lost connection with WiFi-box"
                 self._printerState = "lost"
                 self.printPhaseChanged.emit()
                 self.printerStateChanged.emit()
@@ -448,8 +448,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             self.isPrintingChanged.emit()         
             time.sleep(2)
 
-    # HTTP GET request to the Doodle3D Wi-Fi box
-    # Domain could be the Doodle3D Wi-Fi box IP, path is usually "d3dapi/info/status"
+    # HTTP GET request to the Doodle3D WiFi box
+    # Domain could be the Doodle3D WiFi box IP, path is usually "d3dapi/info/status"
     def httpget(self, domain, path):
         connect = http.client.HTTPConnection(domain,80,timeout=5)
         connect.request("GET", path)
@@ -457,8 +457,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         jsonresponse = response.read()
         return json.loads(jsonresponse.decode())
 
-    # HTTP POST request to the Doodle3D Wi-Fi box
-    # Domain could be the Doodle3D Wi-Fi box IP, path is usually "d3dapi/info/status"
+    # HTTP POST request to the Doodle3D WiFi box
+    # Domain could be the Doodle3D WiFi box IP, path is usually "d3dapi/info/status"
     def httppost(self, domain, path, data):
         params = urllib.parse.urlencode(data)
         headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}
