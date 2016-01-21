@@ -80,7 +80,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._connect_thread.daemon = True
 
 
-        self.flagevent = threading.Event()
         #######################################################################
     
     connectionStateChanged = Signal()
@@ -145,16 +144,12 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     # This function runs when you press the "cancel" button in the control interface
     @pyqtSlot()
     def testButton(self):
-        #Application.getInstance().getBackend().processingProgress.connect(self.onProcessingProgress)
-        #Application.getInstance().getBackend().printDurationMessage.connect(self.onPrintDurationMessage)
 
 
         self.setGCodeFlavor("RepRap")
         print(self.getGCodeFlavor())
 
-        self.forceSlice()
-        #self._gcode_list = getattr(Application.getInstance().getController().getScene(), "gcode_list")
-        #Logger.log("d","GCODE IS:%s" % self._gcode_list)
+        #self.forceSlice()
 
     @pyqtSlot()
     def cancelPrint(self):
@@ -228,9 +223,9 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                         self.setGCodeFlavor(self.originalFlavor)
                     return
                 if self.printerInfo['buffered_lines'] <= 150000:
+                    self.releaseStateLock()
                     try:
                         Response = self.sendGCode('\n'.join(blocks[j]), j)  # Send next block
-                        self.releaseStateLock()
                         if Response['status'] == "success":  # If the block is successfully sent
                             successful = True  # Set the variable to True
                             self.currentblock += 1  # Go to the next block in the array
@@ -345,7 +340,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     def setGCodeFlavor(self,flavor):
         Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor",flavor)
-        return
 
     def getGCodeFlavor(self):
         flavor = Application.getInstance().getMachineManager().getActiveMachineInstance().getMachineSettingValue("machine_gcode_flavor")
@@ -353,7 +347,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     def forceSlice(self):
         Application.getInstance().getBackend().forceSlice()
-        return
 
     def getPrinterInfo(self):
         ## #1 First check if the box is on
@@ -384,15 +377,12 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 self.printPhaseChanged.emit()
 
             try: #3
+                self.setState(self.printerInfo['state'])
                 self._extTemperature = self.printerInfo['hotend']  # Get Extruder Temperature 
                 self._extTargetTemperature = self.printerInfo['hotend_target']  # Get Extruder Target Temperature
-                self._APIState = self.printerInfo['state']
-                self.setState(self.printerInfo['state'])
                 self._bedTemperature = self.printerInfo['bed'] # Get bed temperature
                 self._bedTargetTemperature = self.printerInfo['bed_target'] # Get bed target temperature
 
-                if (self._APIState == self._printerState):
-                    self.releaseStateLock()
 
                 self.extruderTemperatureChanged.emit()
                 self.extruderTargetChanged.emit() 
@@ -428,17 +418,17 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
             elif self._printerState == "idle":
                 self._heatedUp = False
-                self.flagevent.clear()
                 if self._progress > 0:
                     self.setProgress(0, 100)
+                    self._is_printing = False
                     self._printPhase = "Print Completed"
                 elif self._progress == 0:
-                    self._is_printing = False
+                    #self._is_printing = False
                     self._printPhase = "Ready to print"
                     
             elif self._printerState == "stopping":
                 self.setProgress(0,100)
-                self._is_printing = False
+                #self._is_printing = False
                 self._printPhase = "Stopping the print, it might take some time"
             else:
                 self._printPhase = ""
