@@ -338,8 +338,11 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor",flavor)
 
     def getGCodeFlavor(self):
-        flavor = Application.getInstance().getMachineManager().getActiveMachineInstance().getMachineSettingValue("machine_gcode_flavor")
-        return flavor
+        try:
+            flavor = Application.getInstance().getMachineManager().getActiveMachineInstance().getMachineSettingValue("machine_gcode_flavor")
+            return flavor
+        except:
+            pass
 
     def forceSlice(self):
         Application.getInstance().getBackend().forceSlice()
@@ -350,7 +353,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         #  #3 Gather all data from printer (Temperatures, Temperature Targets, Printer State etc.)
         #  #4 Check state and act accordingly
         while True:
-            print("Flavor is: "+self.getGCodeFlavor())
+            print("Flavor is: ",self.getGCodeFlavor())
             try: #1
                 self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
                 self.printerInfo = self.printerInfo['data']
