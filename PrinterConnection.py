@@ -79,7 +79,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._connect_thread = threading.Thread(target=self._connect)
         self._connect_thread.daemon = True
 
-
         #######################################################################
     
     connectionStateChanged = Signal()
@@ -144,11 +143,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     # This function runs when you press the "cancel" button in the control interface
     @pyqtSlot()
     def testButton(self):
-
-
         self.setGCodeFlavor("RepRap")
         print(self.getGCodeFlavor())
-
         #self.forceSlice()
 
     @pyqtSlot()
@@ -383,7 +379,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 self._bedTemperature = self.printerInfo['bed'] # Get bed temperature
                 self._bedTargetTemperature = self.printerInfo['bed_target'] # Get bed target temperature
 
-
                 self.extruderTemperatureChanged.emit()
                 self.extruderTargetChanged.emit() 
                 self.printerStateChanged.emit()
@@ -458,6 +453,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         jsonresponse = response.read()
         Logger.log("d","Response is: %s" % jsonresponse)
         return json.loads(jsonresponse.decode())
+
     def onShutDown(self):
         if self.originalFlavor != None:
             self.setGCodeFlavor(self.originalFlavor)       
