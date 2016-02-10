@@ -8,5 +8,5 @@ Doodle3D.py is the manager that creates and destroys instances of PrinterConnect
 
 The Cura-generated GCode gets divided into multiple chunks, then gets sent chunk by chunk to the Doodle3D-WiFi Box to process:
 
-- `<boxIP>/d3dapi/printer/print"`
+- `<boxIP>/d3dapi/printer/print`
 - `e.g. 10.0.0.195/d3dapi/printer/print`
