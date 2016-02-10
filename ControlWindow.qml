@@ -18,7 +18,8 @@ UM.Dialog
 
     maximumWidth: 400;
     maximumHeight:143;
-    modality: Qt.ApplicationModal
+    modality: Qt.NonModal;
+    flags: Qt.Dialog | Qt.CustomizeWindowHint | Qt.WindowTitleHint | Qt.WindowCloseButtonHint | Qt.WindowStaysOnTopHint;
     // flags: Qt.Raise
     
     // d3dbase.raise();
@@ -88,7 +89,7 @@ UM.Dialog
             }
             //enabled: manager.getProgress == 0 ? false:  true
         },
-
+        /*
         Button
         {
             //: USB Printing dialog cancel print button
@@ -101,7 +102,7 @@ UM.Dialog
             }
             //enabled: manager.getProgress == 0 ? false:  true
         },
-
+        */
         Button
         {
             id: printbutton;
