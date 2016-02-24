@@ -139,14 +139,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
         return gcodeResponse
 
-    
-    # This function runs when you press the "cancel" button in the control interface
-    @pyqtSlot()
-    def testButton(self):
-        self.setGCodeFlavor("RepRap")
-        print(self.getGCodeFlavor())
-        #self.forceSlice()
-
     @pyqtSlot()
     def cancelPrint(self):
         self.overrideState("stopping")
@@ -358,7 +350,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
                 self.printerInfo = self.printerInfo['data']
             except:
-                self._printPhase = "Lost connection with WiFi-box"
+                self._printPhase = "Lost connection with Doodle3D WiFi-Box"
                 self._printerState = "lost"
                 self.printPhaseChanged.emit()
                 self.printerStateChanged.emit()
@@ -372,7 +364,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
             if self._printerState == "disconnected": #2
                 Logger.log("d","This box is not connected to the printer: %s" % self._box_ID)
-                self._printPhase = "Box not connected to a printer "
+                self._printPhase = "Doodle3D WiFi-Box not connected to a printer "
                 self.printPhaseChanged.emit()
 
             try: #3
