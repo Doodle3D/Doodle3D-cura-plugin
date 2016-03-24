@@ -43,10 +43,11 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
 
         self._check_updates = True
         self._firmware_view = None
+        self.updatetrigger = False
 
         # Add menu item to top menu of the application.
         self.setMenuName(i18n_catalog.i18nc("@title:menu", "Doodle3D"))
-        # self.addMenuItem(i18n_catalog.i18nc("@item:inmenu", "Settings..."), self.updateAllFirmware)
+        self.addMenuItem(i18n_catalog.i18nc("@item:inlistbox", "Enable Scan devices..."), self.updateAllFirmware)
 
         Application.getInstance().applicationShuttingDown.connect(self.stop)
         self.addConnectionSignal.connect(self.addConnection)
@@ -54,7 +55,9 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     # Because the model needs to be created in the same thread as the QMLEngine, we use a signal.
     addConnectionSignal = Signal()
     printerConnectionStateChanged = pyqtSignal()
+    settingChanged = pyqtSignal()
 
+    """
     def start(self):
         self._check_updates = True
         self._update_thread.start()
@@ -65,9 +68,10 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
             self._update_thread.join()
         except RuntimeError:
             pass
+    """
 
     def _updateThread(self):
-        while self._check_updates:
+        while self.updatetrigger==True:
             result = self.getSerialPortList()
             Logger.log("d","Connected Boxes: %s" % result)
             self._addRemovePorts(result)
@@ -86,12 +90,19 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
         self._firmware_view.show()
 
     def updateAllFirmware(self):
+        self.updatetrigger = True
+        if not self._update_thread.isAlive():
+            self._update_thread.start()
+        
+        """
         self.spawnFirmwareInterface("")
+        
         for printer_connection in self._printer_connections:
             try:
                 self._printer_connections[printer_connection].updateFirmware(Resources.getPath(CuraApplication.ResourceTypes.Firmware, self._getDefaultFirmwareName()))
             except FileNotFoundError:
                 continue
+        """
     
     @pyqtSlot(str, result=bool)
     def updateFirmwareBySerial(self, serial_port):

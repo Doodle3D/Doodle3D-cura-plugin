@@ -20,4 +20,4 @@ def getMetaData():
 
 def register(app):
     qmlRegisterSingletonType(Doodle3D.Doodle3D, "UM", 1, 0, "Doodle3D", Doodle3D.Doodle3D.getInstance)
-    return {"extension":Doodle3D.Doodle3D.getInstance(),"output_device": Doodle3D.Doodle3D.getInstance() }
+    return {"extension":Doodle3D.Doodle3D.getInstance(),"output_device": Doodle3D.Doodle3D.getInstance()}

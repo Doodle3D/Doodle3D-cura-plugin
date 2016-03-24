@@ -169,8 +169,9 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self.amount = amount
         if self._is_printing == True:
             self._is_printing = False
-            self._printing_thread.start()
-            #Application.getInstance().getBackend().printDurationMessage.disconnect(self.onFinishedSlicing)
+            if not self._printing_thread.isAlive():
+                self._printing_thread.start()
+        Application.getInstance().getBackend().printDurationMessage.disconnect(self.onFinishedSlicing)
 
     # Starts the print
     def printGCode(self):
@@ -191,7 +192,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         for i in range(len(self.decodedList)):
             self.tempBlock.append(self.decodedList[i])
 
-            if sys.getsizeof(self.tempBlock) > 7000:
+            if sys.getsizeof(self.tempBlock) > 3000:
                 blocks.append(self.tempBlock)
                 Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
                 self.tempBlock = []
@@ -306,7 +307,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._bed_temperature = temperature
         self.bedTemperatureChanged.emit()
 
-    def requestWrite(self, node, file_name = None):
+    def requestWrite(self, node, file_name = None, filter_by_machine = False):
         self.showControlInterface()
 
     # Set the progress of the print. current progress and maximum progress.
@@ -345,7 +346,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         #  #3 Gather all data from printer (Temperatures, Temperature Targets, Printer State etc.)
         #  #4 Check state and act accordingly
         while True:
-            print("Flavor is: ",self.getGCodeFlavor())
+            #print("Flavor is: ",self.getGCodeFlavor())
             try: #1
                 self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
                 self.printerInfo = self.printerInfo['data']
