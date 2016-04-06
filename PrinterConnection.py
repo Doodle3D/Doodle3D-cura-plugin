@@ -65,7 +65,6 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self._progress = 0            # Progress of the print
         self._printPhase = ""         # 3 printer phases: "Heating up... ", "Printing... " and "Print Completed "
         self._printerState = ""
-
         self._stateLocked = False       
 
         self._gcode_list = []         # Cura-generated GCode
@@ -148,6 +147,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
             self.setGCodeFlavor(self.originalFlavor)
         self.httppost(self._box_IP, "/d3dapi/printer/stop", {'gcode': 'M104 S0\nG28'})  # Cancels the current print by HTTP POSTing the stop gcode.
         self.setProgress(0, 100)  # Resets the progress to 0.
+        Logger.log("i", "Established printer connection on port %s" % self._box_IP)
         self.forceSlice()
 
     # This function runs when you press the "print" button in the plugin window
@@ -164,7 +164,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         self.forceSlice()
 
     def onFinishedSlicing(self, time, amount):
-        Logger.log("d","Finished slicing")
+        Logger.log("i","Finished slicing")
         self.time = time
         self.amount = amount
         if self._is_printing == True:
@@ -179,7 +179,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         # self.isPrintingChanged.emit()
         self._is_cancelling = False
         self._gcode_list = getattr(Application.getInstance().getController().getScene(), "gcode_list")
-        Logger.log("d","GCODE IS:%s" % self._gcode_list)
+        #Logger.log("d","GCODE IS:%s" % self._gcode_list)
         #with open("bimbambom.txt", "w") as text_file:
         #    print("GCode: {}".format(self._gcode_list), file=text_file)
 
@@ -194,7 +194,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
             if sys.getsizeof(self.tempBlock) > 3000:
                 blocks.append(self.tempBlock)
-                Logger.log("d", "New block, size: %s" % sys.getsizeof(self.tempBlock))
+                Logger.log("i", "New block, size: %s" % sys.getsizeof(self.tempBlock))
                 self.tempBlock = []
 
         blocks.append(self.tempBlock)
@@ -218,9 +218,9 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                         if Response['status'] == "success":  # If the block is successfully sent
                             successful = True  # Set the variable to True
                             self.currentblock += 1  # Go to the next block in the array
-                            Logger.log("d", "Successfully sent block %s from %s" % (self.currentblock, self.total))
+                            Logger.log("i", "Successfully sent block %s from %s" % (self.currentblock, self.total))
                     except:
-                        Logger.log("d","Failed block, sending again in 15 seconds")
+                        Logger.log("i","Failed block, sending again in 15 seconds")
                         time.sleep(15)  # Send the failed block again after 15 seconds
                 else:
                     time.sleep(3)
@@ -238,7 +238,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     # Private connect function run by thread. Can be started by calling connect.
     def _connect(self):
-        Logger.log("d", "Attempting to connect to %s", self._box_IP)
+        Logger.log("i", "Attempting to connect to %s", self._box_IP)
         self._is_connecting = True
         self.setIsConnected(True)
         Logger.log("i", "Established printer connection on port %s" % self._box_IP)
@@ -256,7 +256,7 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     # Close the printer connection
     def close(self):
-        Logger.log("d", "Closing the printer connection.")
+        Logger.log("i", "Closing the printer connection.")
         if self._connect_thread.isAlive():
             try:
                 self._connect_thread.join()
@@ -329,6 +329,8 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
 
     def setGCodeFlavor(self,flavor):
         Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_gcode_flavor",flavor)
+        Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_start_gcode", "G21\nG90\nM107\nG28\nG1 Z15 F9000\nG92 E0\nG92 E0\nG1 F9000")
+        Application.getInstance().getMachineManager().getActiveMachineInstance().setMachineSettingValue("machine_end_gcode", "M106 S0\nG91\nG1 E-1 F300\nG1 Z+5.5 E-5 X-20 Y-20 F9000\nG28\nM84\nG90")
 
     def getGCodeFlavor(self):
         try:
@@ -347,10 +349,14 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
         #  #4 Check state and act accordingly
         while True:
             #print("Flavor is: ",self.getGCodeFlavor())
+
             try: #1
+
                 self.printerInfo = self.httpget(self._box_IP, "/d3dapi/info/status")
-                self.printerInfo = self.printerInfo['data']
-            except:
+                if self.printerInfo != None:
+                    self.printerInfo = self.printerInfo['data']
+                
+            except Exception as e:
                 self._printPhase = "Lost connection with Doodle3D WiFi-Box"
                 self._printerState = "lost"
                 self.printPhaseChanged.emit()
@@ -364,26 +370,29 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                 continue
 
             if self._printerState == "disconnected": #2
-                Logger.log("d","This box is not connected to the printer: %s" % self._box_ID)
+                #Logger.log("d","This box is not connected to the printer: %s" % self._box_ID)
                 self._printPhase = "Doodle3D WiFi-Box not connected to a printer "
                 self.printPhaseChanged.emit()
 
-            try: #3
-                self.setState(self.printerInfo['state'])
-                self._extTemperature = self.printerInfo['hotend']  # Get Extruder Temperature 
-                self._extTargetTemperature = self.printerInfo['hotend_target']  # Get Extruder Target Temperature
-                self._bedTemperature = self.printerInfo['bed'] # Get bed temperature
-                self._bedTargetTemperature = self.printerInfo['bed_target'] # Get bed target temperature
-
-                self.extruderTemperatureChanged.emit()
-                self.extruderTargetChanged.emit() 
-                self.printerStateChanged.emit()
-                self.bedTemperatureChanged.emit()
-                self.bedTargetTemperatureChanged.emit()
-
-            except KeyError:
-                time.sleep(3)
+            if self.printerInfo == None: #3
                 continue
+            else:
+                try:
+                    self.setState(self.printerInfo['state'])
+                    self._extTemperature = self.printerInfo['hotend']  # Get Extruder Temperature 
+                    self._extTargetTemperature = self.printerInfo['hotend_target']  # Get Extruder Target Temperature
+                    self._bedTemperature = self.printerInfo['bed'] # Get bed temperature
+                    self._bedTargetTemperature = self.printerInfo['bed_target'] # Get bed target temperature
+
+                    self.extruderTemperatureChanged.emit()
+                    self.extruderTargetChanged.emit() 
+                    self.printerStateChanged.emit()
+                    self.bedTemperatureChanged.emit()
+                    self.bedTargetTemperatureChanged.emit()
+
+                except KeyError:
+                    time.sleep(3)
+                    continue
 
             if self.printerInfo['state'] == "printing": #4
                 self._currentLine = self.printerInfo['current_line']
@@ -415,12 +424,14 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
                     self._printPhase = "Print Completed"
                 elif self._progress == 0:
                     #self._is_printing = False
+                    self.releaseStateLock()
                     self._printPhase = "Ready to print"
                     
             elif self._printerState == "stopping":
                 self.setProgress(0,100)
                 #self._is_printing = False
                 self._printPhase = "Stopping the print, it might take some time"
+                self.releaseStateLock()
             else:
                 self._printPhase = ""
                 self._heatedUp = False 
@@ -432,23 +443,32 @@ class PrinterConnection(OutputDevice, QObject, SignalEmitter):
     # HTTP GET request to the Doodle3D WiFi box
     # Domain could be the Doodle3D WiFi box IP, path is usually "d3dapi/info/status"
     def httpget(self, domain, path):
-        connect = http.client.HTTPConnection(domain,80,timeout=5)
-        connect.request("GET", path)
-        response = connect.getresponse()
-        jsonresponse = response.read()
-        return json.loads(jsonresponse.decode())
+        try:
+            connect = http.client.HTTPConnection(domain,80,timeout=5)
+            connect.request("GET", path)
+            response = connect.getresponse()     
+            jsonresponse = response.read()
+            return json.loads(jsonresponse.decode())
+        except Exception as e:
+            time.sleep(5)
+            return
+            
 
     # HTTP POST request to the Doodle3D WiFi box
     # Domain could be the Doodle3D WiFi box IP, path is usually "d3dapi/info/status"
     def httppost(self, domain, path, data):
-        params = urllib.parse.urlencode(data)
-        headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}
-        connect = http.client.HTTPConnection(domain, 80, timeout=5)
-        connect.request("POST", path, params, headers)
-        response = connect.getresponse()
-        jsonresponse = response.read()
-        Logger.log("d","Response is: %s" % jsonresponse)
-        return json.loads(jsonresponse.decode())
+        try:
+            params = urllib.parse.urlencode(data)
+            headers = {"Content-type": "x-www-form-urlencoded", "Accept": "text/plain", "User-Agent": "Cura Doodle3D connection"}
+            connect = http.client.HTTPConnection(domain, 80, timeout=5)
+            connect.request("POST", path, params, headers)
+            response = connect.getresponse()
+            jsonresponse = response.read()
+            Logger.log("d","Response is: %s" % jsonresponse)
+            return json.loads(jsonresponse.decode())
+        except Exception as e:
+            time.sleep(5)
+            Logger.log("d","[Doodle3D] POST failed %s" % e)
 
     def onShutDown(self):
         if self.originalFlavor != None:

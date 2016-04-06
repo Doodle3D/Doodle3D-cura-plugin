@@ -73,8 +73,11 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
     def _updateThread(self):
         while self.updatetrigger==True:
             result = self.getSerialPortList()
-            Logger.log("d","Connected Boxes: %s" % result)
-            self._addRemovePorts(result)
+            #Logger.log("d","Connected Boxes: %s" % result)
+            thereturn = self._addRemovePorts(result)
+            if thereturn == False:
+                self.updatetrigger=False
+                break
             time.sleep(5)
 
     # Show firmware interface.
@@ -91,8 +94,11 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
 
     def updateAllFirmware(self):
         self.updatetrigger = True
-        if not self._update_thread.isAlive():
+        try:
             self._update_thread.start()
+        except RuntimeError:
+            Logger.log("d","[Doodle3D] Thread already started")
+
         
         """
         self.spawnFirmwareInterface("")
@@ -153,6 +159,8 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
 
     def _addRemovePorts(self, serial_ports):
         # First, find and add all new or changed keys
+        if serial_ports == None:
+            return False
         for boxIP, boxIDENT in serial_ports.items():
             if boxIP not in self._serial_port_list:
                 self.addConnectionSignal.emit(boxIP,boxIDENT)
@@ -190,6 +198,8 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
         # Get response from api/list.php and retrieve local ip
         # from each individual boxes found on the local network
         boxesListResponse = self.get("connect.doodle3d.com", "/api/list.php")
+        if (boxesListResponse == False):
+            return
         boxes = boxesListResponse['data']
 
         for index in range(len(boxes)):
@@ -216,13 +226,17 @@ class Doodle3D(QObject, SignalEmitter, OutputDevicePlugin, Extension):
 
     # Takes Domain and Path and returns decoded JSON response back
     def get(self, domain, path):
-        #print('get: ', domain, path)
-        connect = http.client.HTTPConnection(domain)
-        connect.request("GET", path)
-        response = connect.getresponse()
-        #print('  response: ', response.status, response.reason)
-        jsonresponse = response.read()
-        #print('  ', jsonresponse)
-        return json.loads(jsonresponse.decode())
+        try:
+            #print('get: ', domain, path)
+            connect = http.client.HTTPConnection(domain)
+            connect.request("GET", path)
+            response = connect.getresponse()
+            #print('  response: ', response.status, response.reason)
+            jsonresponse = response.read()
+            #print('  ', jsonresponse)
+            return json.loads(jsonresponse.decode())
+        except Exception as e:
+            pass
+        return False
 
     _instance = None
