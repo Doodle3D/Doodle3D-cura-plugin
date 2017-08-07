@@ -6,10 +6,7 @@ find_package(PythonInterp 3.4.0 REQUIRED)
 
 install(FILES
     __init__.py
-    Doodle3D.py
-    PrinterConnection.py
-    ControlWindow.qml
-    SettingsWindow.qml
+    D3DCloudPrintPlugin.py
     doodle3d.png
     DESTINATION lib/cura/plugins/Doodle3D
 )

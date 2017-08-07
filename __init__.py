@@ -1,23 +1,20 @@
 # Copyright (c) 2015 Ultimaker B.V.
 # Cura is released under the terms of the AGPLv3 or higher.
 
-from . import Doodle3D
-from PyQt5.QtQml import qmlRegisterType, qmlRegisterSingletonType
+from . import D3DCloudPrintPlugin
 from UM.i18n import i18nCatalog
 i18n_catalog = i18nCatalog("cura")
 
 def getMetaData():
     return {
-        "type": "extension",
         "plugin": {
-            "name": i18n_catalog.i18nc("@label", "Doodle3D"),
+            "name": "Doodle3D WiFi-box print",
             "author": "Doodle3D",
-            "version": "1.0",
-            "api": 2,
+            "version": "2.0",
+            "api": 3,
             "description": i18n_catalog.i18nc("@info:whatsthis","Accepts G-Code and sends them over WiFi to a Doodle3D WiFi-Box.")
         }
     }
 
 def register(app):
-    qmlRegisterSingletonType(Doodle3D.Doodle3D, "UM", 1, 0, "Doodle3D", Doodle3D.Doodle3D.getInstance)
-    return {"extension":Doodle3D.Doodle3D.getInstance(),"output_device": Doodle3D.Doodle3D.getInstance()}
+    return { "output_device": D3DCloudPrintPlugin.D3DCloudPrintPlugin() }
