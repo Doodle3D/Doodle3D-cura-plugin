@@ -21,8 +21,6 @@ class D3DCloudPrintPlugin(OutputDevicePlugin):
     def __init__(self):
         super().__init__()
 
-        Preferences.getInstance().addPreference("d3dcloudprint/gcode_server", "")
-    
     def start(self):
         self.getOutputDeviceManager().addOutputDevice(D3DCloudPrintOutputDevice())
 
