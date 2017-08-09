@@ -7,10 +7,13 @@ from UM.Message import Message
 from UM.Application import Application
 
 from cura.PrinterOutputDevice import PrinterOutputDevice
+from cura.Settings.MachineManager import MachineManager
 
 from PyQt5.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager, QNetworkReply
 from PyQt5.QtCore import QUrl, QByteArray
 from PyQt5.QtGui import QDesktopServices
+
+from . import ConnectPrinterIdTranslation
 
 import json
 import inspect
@@ -55,18 +58,36 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
         Logger.log("d", "print started")
         self.uploading = True
 
-        job_name = Application.getInstance().getPrintInformation().jobName.strip()
-        if job_name is "":
-            job_name = "untitled_print"
-            file_name = "%s.gcode" % job_name
 
         url = QUrl("https://gcodeserver.doodle3d.com/upload")
         self._manager.post(QNetworkRequest(url), QByteArray())
 
     def uploadGCode(self, data):
         try:
+            job_name = Application.getInstance().getPrintInformation().jobName.strip()
+            if job_name is "":
+                job_name = "untitled_print"
+            file_name = "%s.gcode" % job_name
+
+            global_stack = Application.getInstance().getGlobalContainerStack()
+            machine_manager = Application.getInstance().getMachineManager()
+
+            sliceInfo = {
+                'printer': {
+                    'type': ConnectPrinterIdTranslation.curaPrinterIdToConnect(machine_manager.activeDefinitionId),
+                    'title': global_stack.getName()
+                },
+                'material': {
+                    'type': global_stack.material.getId(),
+                    'title': global_stack.material.getName()
+                },
+                'filamentThickness': global_stack.getProperty("material_diameter", "value"),
+                'temperature': global_stack.getProperty("material_print_temperature", "value"),
+                'name': job_name
+            }
+
             gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
-            gcode = "";
+            gcode = ";%s\n" % json.dumps(sliceInfo);
             for line in gcode_list:
                 gcode += line
 
