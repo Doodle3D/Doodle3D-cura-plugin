@@ -147,7 +147,9 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
         status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
 
         if not status_code:
+            Logger.log("d", "A reply from %s did not have status code.", reply.url().toString())
             self.uploading = False
+            self._progress_message.hide()
             return
 
         reply_url = reply.url().toString()
@@ -161,7 +163,8 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
             self.gcodeId = json_data["data"]["id"]
 
             reply.deleteLater()
-            self._post_reply = None
+            if reply == self._post_reply:
+                self._post_reply = None
             self._progress_message.hide()
             self.uploadGCode(json_data)
         elif "amazonaws" in reply_url:
@@ -188,6 +191,3 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
                 self._post_reply = None
         else:
             Logger.log("d", "unknown action: %s" % action)
-
-
-
