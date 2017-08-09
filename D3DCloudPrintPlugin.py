@@ -52,10 +52,10 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
 
     def requestWrite(self, nodes, file_name = None, filter_by_machine = False, file_handler = None, **kwargs):
         if not self.uploading:
-            self.startPrint();
+            self.startUpload();
 
-    def startPrint(self):
-        Logger.log("d", "print started")
+    def startUpload(self):
+        Logger.log("d", "Upload to Doodle3D connect started")
         self.uploading = True
 
 
@@ -91,12 +91,9 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
             for line in gcode_list:
                 gcode += line
 
-            Logger.log("d", "{}", gcode)
-
             multi_part = QHttpMultiPart(QHttpMultiPart.FormDataType)
 
             for prop_name, prop_value in data["data"]["reservation"]["fields"].items():
-                Logger.log("d", "{}: {}", prop_name, prop_value)
                 part = QHttpPart()
                 part.setHeader(QNetworkRequest.ContentDispositionHeader, "form-data; name=\"%s\"" % prop_name)
                 part.setBody(prop_value.encode())
