@@ -59,8 +59,13 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
         self.uploading = True
 
 
+        self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Connecting to Doodle3D Connect"), 0, False, -1)
+        self._progress_message.addAction("Cancel", i18n_catalog.i18nc("@action:button", "Cancel"), None, "")
+        self._progress_message.actionTriggered.connect(self._onMessageActionTriggered)
+        self._progress_message.show()
+        # Request upload credentials
         url = QUrl("https://gcodeserver.doodle3d.com/upload")
-        self._manager.post(QNetworkRequest(url), QByteArray())
+        self._post_reply = self._manager.post(QNetworkRequest(url), QByteArray())
 
     def uploadGCode(self, data):
         try:
@@ -107,13 +112,17 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
             upload_url = QUrl(data["data"]["reservation"]["url"])
             Logger.log("d", "{}", upload_url)
 
-            reply = self._manager.post(QNetworkRequest(upload_url), multi_part)
-            reply.uploadProgress.connect(self._onProgress)
+            self._post_reply = self._manager.post(QNetworkRequest(upload_url), multi_part)
+            self._post_reply.uploadProgress.connect(self._onProgress)
             self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Sending data to Doodle3D Connect"), 0, False, -1)
             self._progress_message.addAction("Cancel", i18n_catalog.i18nc("@action:button", "Cancel"), None, "")
+            self._progress_message.actionTriggered.connect(self._onMessageActionTriggered)
             self._progress_message.show()
-            multi_part.setParent(reply)
+            multi_part.setParent(self._post_reply)
         except Exception as e:
+            self._progress_message.hide()
+            self._progress_message =  Message(i18n_catalog.i18nc("@info:status", "Unable to send data to Doodle3D Connect. Is another job still active?"))
+            self._progress_message.show()
             Logger.log("e", "An exception occured during G-code upload: %s" % str(e))
 
     def _onProgress(self, bytes_sent, bytes_total):
@@ -135,27 +144,50 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
         if reply.error() == QNetworkReply.TimeoutError:
             Logger.log("w", "Received a timeout on a request to the G-code server")
 
+        status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
+
+        if not status_code:
+            self.uploading = False
+            return
+
         reply_url = reply.url().toString()
         if "upload" in reply_url:
-            json_data = json.loads(bytes(reply.readAll()).decode("utf-8"))
-            Logger.log("d", "{}", json_data)
+            try:
+                json_data = json.loads(bytes(reply.readAll()).decode("utf-8"))
+            except json.decoder.JSONDecodeError:
+                Logger.log("w", "Received invalid upload credentials request reply from Connect: Not valid JSON.")
+                return
 
             self.gcodeId = json_data["data"]["id"]
 
             reply.deleteLater()
-            self.uploadGCode(json_data);
-        if "amazonaws" in reply_url:
+            self._post_reply = None
             self._progress_message.hide()
-            self._progress_message = Message(i18n_catalog.i18nc("@info:status", "G-code file sent to Doodle3D Connect"))
-            self._progress_message.addAction("open_browser", i18n_catalog.i18nc("@action:button", "Open Connect.."), "globe", i18n_catalog.i18nc("@info:tooltip", "Open the Doodle3D Connect web interface"))
-            self._progress_message.actionTriggered.connect(self._onMessageActionTriggered)
-            self._progress_message.show()
-            self.uploading = False
-            Logger.log("d", "uploaded to amazon")
+            self.uploadGCode(json_data)
+        elif "amazonaws" in reply_url:
+            if status_code == 204:
+                self._progress_message.hide()
+                self._progress_message = Message(i18n_catalog.i18nc("@info:status", "G-code file sent to Doodle3D Connect"))
+                self._progress_message.addAction("open_browser", i18n_catalog.i18nc("@action:button", "Open Connect.."), "globe", i18n_catalog.i18nc("@info:tooltip", "Open the Doodle3D Connect web interface"))
+                self._progress_message.actionTriggered.connect(self._onMessageActionTriggered)
+                self._progress_message.show()
+                self.uploading = False
+                Logger.log("d", "uploaded to amazon")
+            else:
+                self._progress_message.hide()
+                Logger.log("w", "Unexpected status code in reply from AWS S3")
 
     def _onMessageActionTriggered(self, message, action):
         if action == "open_browser":
             QDesktopServices.openUrl(QUrl("%s?uuid=%s" % (self.base_url, self.gcodeId)))
+        elif action == "Cancel":
+            Logger.log("d", "canceled upload to Doodle3D Connect")
+            self._progress_message.hide()
+            if self._post_reply:
+                self._post_reply.abort()
+                self._post_reply = None
+        else:
+            Logger.log("d", "unknown action: %s" % action)
 
 
 
