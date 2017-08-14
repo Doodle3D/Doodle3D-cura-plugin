@@ -177,6 +177,10 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
                 self._progress_message.hide()
                 Logger.log("w", "Unexpected status code in reply from AWS S3")
 
+        reply.deleteLater()
+        if reply == self._post_reply:
+            self._post_reply = None
+
     def _onMessageActionTriggered(self, message, action):
         if action == "open_browser":
             QDesktopServices.openUrl(QUrl("%s?uuid=%s" % (self.base_url, self.gcodeId)))
