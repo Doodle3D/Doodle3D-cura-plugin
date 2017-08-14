@@ -36,9 +36,9 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
         super().__init__("d3dcloudprint")
 
         self.setPriority(2)
-        self.setName("Doodle3D WiFi-box")
-        self.setShortDescription(i18n_catalog.i18nc("@action:button", "Print with Doodle3D WiFi-box"))
-        self.setDescription(i18n_catalog.i18nc("@properties:tooltip", "Print with Doodle3D WiFi-box"))
+        self.setName("Doodle3D WiFi-Box")
+        self.setShortDescription(i18n_catalog.i18nc("@action:button", "Print with Doodle3D WiFi-Box"))
+        self.setDescription(i18n_catalog.i18nc("@properties:tooltip", "Print with Doodle3D WiFi-Box"))
         self.setIconName("print")
 
         self._progress_message = None
@@ -162,15 +162,12 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
 
             self.gcodeId = json_data["data"]["id"]
 
-            reply.deleteLater()
-            if reply == self._post_reply:
-                self._post_reply = None
             self._progress_message.hide()
             self.uploadGCode(json_data)
         elif "amazonaws" in reply_url:
             if status_code == 204:
                 self._progress_message.hide()
-                self._progress_message = Message(i18n_catalog.i18nc("@info:status", "G-code file sent to Doodle3D Connect"))
+                self._progress_message = Message(i18n_catalog.i18nc("@info:status", "File sent to Doodle3D Connect"), 0)
                 self._progress_message.addAction("open_browser", i18n_catalog.i18nc("@action:button", "Open Connect.."), "globe", i18n_catalog.i18nc("@info:tooltip", "Open the Doodle3D Connect web interface"))
                 self._progress_message.actionTriggered.connect(self._onMessageActionTriggered)
                 self._progress_message.show()
