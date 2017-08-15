@@ -143,6 +143,13 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
     def _onFinished(self, reply):
         if reply.error() == QNetworkReply.TimeoutError:
             Logger.log("w", "Received a timeout on a request to the G-code server")
+            if self._post_reply:
+                self._post_reply.abort()
+                self._post_reply.uploadProgress.disconnect(self._onProgress)
+                self._post_reply = None
+            self._progress_message.hide()
+            return
+             
 
         status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
 
@@ -165,7 +172,7 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
             self._progress_message.hide()
             self.uploadGCode(json_data)
         elif "amazonaws" in reply_url:
-            if status_code == 204:
+            if status_code in [200, 201, 202, 204]:
                 self._progress_message.hide()
                 self._progress_message = Message(i18n_catalog.i18nc("@info:status", "File sent to Doodle3D Connect"), 0)
                 self._progress_message.addAction("open_browser", i18n_catalog.i18nc("@action:button", "Open Connect.."), "globe", i18n_catalog.i18nc("@info:tooltip", "Open the Doodle3D Connect web interface"))
