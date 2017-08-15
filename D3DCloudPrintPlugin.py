@@ -66,6 +66,7 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
         # Request upload credentials
         url = QUrl("https://gcodeserver.doodle3d.com/upload")
         self._post_reply = self._manager.post(QNetworkRequest(url), QByteArray())
+        self._post_reply.error.connect(self._onNetworkError)
 
     def uploadGCode(self, data):
         try:
@@ -114,6 +115,7 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
 
             self._post_reply = self._manager.post(QNetworkRequest(upload_url), multi_part)
             self._post_reply.uploadProgress.connect(self._onProgress)
+            self._post_reply.error.connect(self._onNetworkError)
             self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Sending data to Doodle3D Connect"), 0, False, -1)
             self._progress_message.addAction("Cancel", i18n_catalog.i18nc("@action:button", "Cancel"), None, "")
             self._progress_message.actionTriggered.connect(self._onMessageActionTriggered)
@@ -199,3 +201,10 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
                 self._post_reply = None
         else:
             Logger.log("d", "unknown action: %s" % action)
+
+    def _onNetworkError(self, error):
+        Logger.log("w", "Network error: %s, %s" % (error, self._post_reply.errorString()))
+
+    def _onSslError(reply, errors):
+        for error in errors:
+            Logger.log("w", "%s" % error)
