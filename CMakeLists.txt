@@ -8,6 +8,5 @@ install(FILES
     __init__.py
     D3DCloudPrintPlugin.py
     ConnectPrinterIdTranslation.py
-    doodle3d.png
     DESTINATION lib/cura/plugins/Doodle3D
 )
