@@ -123,7 +123,7 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
             multi_part.setParent(self._post_reply)
         except Exception as e:
             self._progress_message.hide()
-            self._progress_message =  Message(i18n_catalog.i18nc("@info:status", "Unable to send data to Doodle3D Connect. Is another job still active?"))
+            self._progress_message = Message(i18n_catalog.i18nc("@info:status", "Unable to send data to Doodle3D Connect. Is another job still active?"))
             self._progress_message.show()
             Logger.log("e", "An exception occured during G-code upload: %s" % str(e))
 
@@ -186,7 +186,6 @@ class D3DCloudPrintOutputDevice(PrinterOutputDevice):
                 self._progress_message.hide()
                 Logger.log("w", "Unexpected status code in reply from AWS S3")
 
-        reply.deleteLater()
         if reply == self._post_reply:
             self._post_reply = None
 
