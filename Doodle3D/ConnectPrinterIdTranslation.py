@@ -14,4 +14,4 @@ def curaPrinterIdToConnect(id):
 	"prusa_i3_mk2": "prusa_iteration_2",
 	"robo_3d_r1": "robo_3d_printer",
 	"renkforce_rf100": "renkforce_rf100"
-}.get(id, id)
+}.get(id, None)

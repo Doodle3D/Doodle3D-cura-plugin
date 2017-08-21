@@ -100,9 +100,21 @@ class D3DCloudPrintOutputDevice(OutputDevice):
             global_stack = Application.getInstance().getGlobalContainerStack()
             machine_manager = Application.getInstance().getMachineManager()
 
+            cura_printer_type = machine_manager.activeDefinitionId
+            printer_type = ConnectPrinterIdTranslation.curaPrinterIdToConnect(cura_printer_type)
+            # Fall back to marlin or makerbot generic if printer is not supported on WiFi-Box
+            if printer_type == None:
+                gcode_flavor = global_stack.getProperty("machine_gcode_flavor", "value")
+                if gcode_flavor == "RepRap (Marlin/Sprinter)":
+                    printer_type = "marlin_generic"
+                else if gcode_flavor == "MakerBot":
+                    printer_type = "makerbot_generic"
+                else:
+                    printer_type = cura_printer_type
+
             sliceInfo = {
                 'printer': {
-                    'type': ConnectPrinterIdTranslation.curaPrinterIdToConnect(machine_manager.activeDefinitionId),
+                    'type': printer_type,
                     'title': global_stack.getName()
                 },
                 'material': {
