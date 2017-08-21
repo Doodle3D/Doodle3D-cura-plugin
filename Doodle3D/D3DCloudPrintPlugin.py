@@ -6,7 +6,7 @@ from UM.OutputDevice.OutputDevicePlugin import OutputDevicePlugin
 from UM.Message import Message
 from UM.Application import Application
 
-from cura.PrinterOutputDevice import PrinterOutputDevice
+from UM.OutputDevice.OutputDevice import OutputDevice
 from cura.Settings.MachineManager import MachineManager
 
 from PyQt5.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager, QNetworkReply
@@ -18,20 +18,42 @@ from . import ConnectPrinterIdTranslation
 import json
 import inspect
 
+i18n_catalog = i18nCatalog("doodle3d")
 
-i18n_catalog = i18nCatalog("cura")
 class D3DCloudPrintPlugin(OutputDevicePlugin):
     def __init__(self):
         super().__init__()
 
-    def start(self):
-        self.getOutputDeviceManager().addOutputDevice(D3DCloudPrintOutputDevice())
+        self._machine_manager = Application.getInstance().getMachineManager()
+        self._machine_manager.globalContainerChanged.connect(self._onActivePrinterChanged)
+
+        self._printer_blacklist = [ "ultimaker3" ]
+        
+        self._output_device = None
+
+        self._addOutputDevice()
+
+    def _onActivePrinterChanged(self):
+        self._addOutputDevice()
+
+    def _addOutputDevice(self):
+        active_printer = self._machine_manager.activeDefinitionId
+        Logger.log("d", "active printer changed: %s" % active_printer)
+        if active_printer not in self._printer_blacklist:
+            if self._output_device == None:
+                self._output_device = D3DCloudPrintOutputDevice()
+            Logger.log("d", "d3dcloudprint outputdevice added")
+            self.getOutputDeviceManager().addOutputDevice(self._output_device)
+        else:
+            Logger.log("d", "printer %s blacklisted" % active_printer)
+            self._output_device = None
+            self.getOutputDeviceManager().removeOutputDevice("d3dcloudprint")
 
     def stop(self):
         self.getOutputDeviceManager().removeOutputDevice("d3dcloudprint")
 
 @signalemitter
-class D3DCloudPrintOutputDevice(PrinterOutputDevice):
+class D3DCloudPrintOutputDevice(OutputDevice):
     def __init__(self):
         super().__init__("d3dcloudprint")
 
