@@ -39,7 +39,7 @@ class D3DCloudPrintOutputDevicePlugin(OutputDevicePlugin):
 
         Logger.log("d", "active printer changed: %s" % active_printer)
         if active_printer not in self._printer_blacklist:
-            if self._output_device == None:
+            if self._output_device is None:
                 self._output_device = D3DCloudPrintOutputDevice()
             Logger.log("d", "d3dcloudprint outputdevice added")
             self.getOutputDeviceManager().addOutputDevice(self._output_device)
@@ -92,7 +92,7 @@ class D3DCloudPrintOutputDevice(OutputDevice):
     def uploadGCode(self, data):
         try:
             job_name = Application.getInstance().getPrintInformation().jobName.strip()
-            if job_name is "":
+            if job_name == "":
                 job_name = "untitled_print"
 
             global_stack = Application.getInstance().getGlobalContainerStack()
@@ -101,7 +101,7 @@ class D3DCloudPrintOutputDevice(OutputDevice):
             cura_printer_type = machine_manager.activeDefinitionId
             printer_type = ConnectPrinterIdTranslation.curaPrinterIdToConnect(cura_printer_type)
             # Fall back to marlin or makerbot generic if printer is not supported on WiFi-Box
-            if printer_type == None:
+            if printer_type is None:
                 gcode_flavor = global_stack.getProperty("machine_gcode_flavor", "value")
                 if gcode_flavor == "RepRap (Marlin/Sprinter)":
                     printer_type = "marlin_generic"
@@ -183,8 +183,7 @@ class D3DCloudPrintOutputDevice(OutputDevice):
                 self._post_reply = None
             self._progress_message.hide()
             return
-
-
+             
         status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
 
         if not status_code:
