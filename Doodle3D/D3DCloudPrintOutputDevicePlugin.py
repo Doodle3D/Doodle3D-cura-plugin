@@ -57,7 +57,7 @@ class D3DCloudPrintOutputDevice(OutputDevice):
     def __init__(self):
         super().__init__("d3dcloudprint")
 
-        self.setPriority(2)
+        self.setPriority(1)
         self.setName("Doodle3D WiFi-Box")
         self.setShortDescription(i18n_catalog.i18nc("@action:button", "Print with Doodle3D WiFi-Box"))
         self.setDescription(i18n_catalog.i18nc("@properties:tooltip", "Print with Doodle3D WiFi-Box"))
@@ -183,7 +183,7 @@ class D3DCloudPrintOutputDevice(OutputDevice):
                 self._post_reply = None
             self._progress_message.hide()
             return
-             
+
         status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
 
         if not status_code:
