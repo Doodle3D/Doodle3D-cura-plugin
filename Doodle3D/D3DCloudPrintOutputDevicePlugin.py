@@ -7,8 +7,6 @@ from UM.Message import Message
 from UM.Application import Application
 
 from UM.OutputDevice.OutputDevice import OutputDevice
-from cura.Settings.MachineManager import MachineManager
-
 from PyQt5.QtNetwork import QHttpMultiPart, QHttpPart, QNetworkRequest, QNetworkAccessManager, QNetworkReply
 from PyQt5.QtCore import QUrl, QByteArray
 from PyQt5.QtGui import QDesktopServices
@@ -16,32 +14,32 @@ from PyQt5.QtGui import QDesktopServices
 from . import ConnectPrinterIdTranslation
 
 import json
-import inspect
 
 i18n_catalog = i18nCatalog("doodle3d")
+
 
 class D3DCloudPrintOutputDevicePlugin(OutputDevicePlugin):
     def __init__(self):
         super().__init__()
 
-        self._machine_manager = Application.getInstance().getMachineManager()
-        self._machine_manager.globalContainerChanged.connect(self._onActivePrinterChanged)
+        Application.getInstance().globalContainerStackChanged.connect(self._onActivePrinterChanged)
 
         self._printer_blacklist = [ "ultimaker3" ]
-        
-        self._output_device = None
 
-        self._addOutputDevice()
+        self._output_device = None
 
     def _onActivePrinterChanged(self):
         self._addOutputDevice()
 
     def _addOutputDevice(self):
-        active_printer = self._machine_manager.activeDefinitionId
+        global_stack = Application.getInstance().getGlobalContainerStack()
+        if global_stack is None:
+            return
+        active_printer = global_stack.definition.getId()
 
         Logger.log("d", "active printer changed: %s" % active_printer)
         if active_printer not in self._printer_blacklist:
-            if self._output_device == None:
+            if self._output_device is None:
                 self._output_device = D3DCloudPrintOutputDevice()
             Logger.log("d", "d3dcloudprint outputdevice added")
             self.getOutputDeviceManager().addOutputDevice(self._output_device)
@@ -50,15 +48,19 @@ class D3DCloudPrintOutputDevicePlugin(OutputDevicePlugin):
             self._output_device = None
             self.getOutputDeviceManager().removeOutputDevice("d3dcloudprint")
 
+    def start(self):
+        pass
+
     def stop(self):
         self.getOutputDeviceManager().removeOutputDevice("d3dcloudprint")
+
 
 @signalemitter
 class D3DCloudPrintOutputDevice(OutputDevice):
     def __init__(self):
         super().__init__("d3dcloudprint")
 
-        self.setPriority(2)
+        self.setPriority(1)
         self.setName("Doodle3D WiFi-Box")
         self.setShortDescription(i18n_catalog.i18nc("@action:button", "Print with Doodle3D WiFi-Box"))
         self.setDescription(i18n_catalog.i18nc("@properties:tooltip", "Print with Doodle3D WiFi-Box"))
@@ -75,7 +77,7 @@ class D3DCloudPrintOutputDevice(OutputDevice):
 
     def requestWrite(self, nodes, file_name = None, filter_by_machine = False, file_handler = None, **kwargs):
         if not self.uploading:
-            self.startUpload();
+            self.startUpload()
 
     def startUpload(self):
         Logger.log("d", "Upload to Doodle3D connect started")
@@ -93,9 +95,8 @@ class D3DCloudPrintOutputDevice(OutputDevice):
     def uploadGCode(self, data):
         try:
             job_name = Application.getInstance().getPrintInformation().jobName.strip()
-            if job_name is "":
+            if job_name == "":
                 job_name = "untitled_print"
-            file_name = "%s.gcode" % job_name
 
             global_stack = Application.getInstance().getGlobalContainerStack()
             machine_manager = Application.getInstance().getMachineManager()
@@ -103,7 +104,7 @@ class D3DCloudPrintOutputDevice(OutputDevice):
             cura_printer_type = machine_manager.activeDefinitionId
             printer_type = ConnectPrinterIdTranslation.curaPrinterIdToConnect(cura_printer_type)
             # Fall back to marlin or makerbot generic if printer is not supported on WiFi-Box
-            if printer_type == None:
+            if printer_type is None:
                 gcode_flavor = global_stack.getProperty("machine_gcode_flavor", "value")
                 if gcode_flavor == "RepRap (Marlin/Sprinter)":
                     printer_type = "marlin_generic"
@@ -126,8 +127,8 @@ class D3DCloudPrintOutputDevice(OutputDevice):
                 'name': job_name
             }
 
-            gcode_list = getattr( Application.getInstance().getController().getScene(), "gcode_list")
-            gcode = ";%s\n" % json.dumps(sliceInfo);
+            gcode_list = getattr(Application.getInstance().getController().getScene(), "gcode_list")
+            gcode = ";%s\n" % json.dumps(sliceInfo)
             for line in gcode_list:
                 gcode += line
 
@@ -185,7 +186,6 @@ class D3DCloudPrintOutputDevice(OutputDevice):
                 self._post_reply = None
             self._progress_message.hide()
             return
-             
 
         status_code = reply.attribute(QNetworkRequest.HttpStatusCodeAttribute)
 
