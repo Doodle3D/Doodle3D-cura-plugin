@@ -22,19 +22,20 @@ class D3DCloudPrintOutputDevicePlugin(OutputDevicePlugin):
     def __init__(self):
         super().__init__()
 
-        self._machine_manager = Application.getInstance().getMachineManager()
-        self._machine_manager.globalContainerChanged.connect(self._onActivePrinterChanged)
+        Application.getInstance().globalContainerStackChanged.connect(self._onActivePrinterChanged)
 
         self._printer_blacklist = [ "ultimaker3" ]
 
         self._output_device = None
 
-
     def _onActivePrinterChanged(self):
         self._addOutputDevice()
 
     def _addOutputDevice(self):
-        active_printer = self._machine_manager.activeDefinitionId
+        global_stack = Application.getInstance().getGlobalContainerStack()
+        if global_stack is None:
+            return
+        active_printer = global_stack.definition.getId()
 
         Logger.log("d", "active printer changed: %s" % active_printer)
         if active_printer not in self._printer_blacklist:
@@ -48,7 +49,7 @@ class D3DCloudPrintOutputDevicePlugin(OutputDevicePlugin):
             self.getOutputDeviceManager().removeOutputDevice("d3dcloudprint")
 
     def start(self):
-        self._addOutputDevice()
+        pass
 
     def stop(self):
         self.getOutputDeviceManager().removeOutputDevice("d3dcloudprint")
